@@ -10,6 +10,6 @@ object A {
 }
 
 object ReproFile2 {
-  ReproTransformer.derived[A, A.B]
+  // ReproTransformer.derived[A, A.B]
   Transformer.forProducts[A, A.B]
 }

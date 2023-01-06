@@ -43,8 +43,11 @@ object ReproTransformer {
         (sourceTpe.asType -> destTpe.asType) match {
           case '[src] -> '[dest] =>
             val transformer = Expr.summon[ReproTransformer[src, dest]].getOrElse(report.errorAndAbort(s"Not found for $name"))
-            val field = accessField(source, name).asExprOf[src]
-            NamedArg(name, '{ $transformer.transform($field) }.asTerm)
+            transformer match {
+              case '{ $transformer: ReproTransformer[a, b] } =>
+                val field = accessField(source, name).asExprOf[a]
+                NamedArg(name, '{ $transformer.transform($field) }.asTerm)
+            }
         }
       }.toList
 
