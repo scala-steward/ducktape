@@ -10,7 +10,7 @@ private[ducktape] object DerivedTransformers {
   inline def product[Source, Dest](using
     Source: Mirror.ProductOf[Source],
     Dest: Mirror.ProductOf[Dest]
-  ): Transformer[Source, Dest] = ${ deriveProductTransformerMacro('Source, 'Dest) }
+  ): Transformer[Source, Dest] = ${ deriveProductTransformerMacro[Source, Dest]('Source, 'Dest) }
 
   def deriveProductTransformerMacro[Source: Type, Dest: Type](
     Source: Expr[Mirror.ProductOf[Source]],
@@ -33,11 +33,11 @@ private[ducktape] object DerivedTransformers {
     ${ deriveToAnyValTransformerMacro[Source, Dest] }
 
   def deriveToAnyValTransformerMacro[Source: Type, Dest <: AnyVal: Type](using Quotes): Expr[Transformer[Source, Dest]] =
-    '{ source => ${ ProductTransformations.transformToAnyVal('source) } }
+    '{ source => ${ ProductTransformations.transformToAnyVal[Source, Dest]('source) } }
 
   inline def fromAnyVal[Source <: AnyVal, Dest] =
     ${ deriveFromAnyValTransformerMacro[Source, Dest] }
 
   def deriveFromAnyValTransformerMacro[Source <: AnyVal: Type, Dest: Type](using Quotes): Expr[Transformer[Source, Dest]] =
-    '{ source => ${ ProductTransformations.transformFromAnyVal('source) } }
+    '{ source => ${ ProductTransformations.transformFromAnyVal[Source, Dest]('source) } }
 }

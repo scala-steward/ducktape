@@ -51,5 +51,12 @@ private[ducktape] object Fields {
       apply(fields)
     }
 
+    final def fromProductType[A: Type](using Quotes): FieldsSubtype = {
+      import quotes.reflect.*
+
+      val tpe = TypeRepr.of[A]
+      apply(tpe.typeSymbol.caseFields.map(sym => Field(sym.name, tpe.memberType(sym).asType)))
+    }
+
   }
 }

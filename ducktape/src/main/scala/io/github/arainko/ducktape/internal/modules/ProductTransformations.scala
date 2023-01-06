@@ -14,13 +14,13 @@ object ProductTransformations {
   )(using Quotes): Expr[Dest] = {
     import quotes.reflect.*
 
-    given Fields.Source = Fields.Source.fromMirror(Source)
-    given Fields.Dest = Fields.Dest.fromMirror(Dest)
+    given Fields.Source = Fields.Source.fromProductType[Source]
+    given Fields.Dest = Fields.Dest.fromProductType[Dest]
 
     val transformerFields = fieldTransformations(sourceValue, Fields.dest.value)
 
     constructor(TypeRepr.of[Dest])
-      .appliedToArgs(transformerFields.toList)
+      .appliedToArgs(transformerFields)
       .asExprOf[Dest]
   }
 
