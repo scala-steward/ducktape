@@ -14,7 +14,7 @@ ThisBuild / developers := List(
     url("https://github.com/arainko")
   )
 )
-ThisBuild / scalaVersion := "3.2.1"
+ThisBuild / scalaVersion := "3.3.0-RC1-bin-20230106-d49c2d9-NIGHTLY"
 ThisBuild / scalafixDependencies += "com.github.liancheng" %% "organize-imports" % "0.6.0"
 
 ThisBuild / versionPolicyIntention := Compatibility.BinaryCompatible

@@ -1,9 +1,7 @@
 package io.github.arainko.ducktape
 
 import scala.quoted.*
-import scala.deriving.Mirror
 
-@FunctionalInterface
 trait ReproTransformer[A, B] {
   def transform(from: A): B
 }
@@ -15,43 +13,20 @@ object ReproTransformer {
 
   given identity[A, B >: A]: Identity[A, B] = Identity[A, B]
 
-  inline given derived[A <: Product, B <: Product](using Mirror.ProductOf[A], Mirror.ProductOf[B]): ReproTransformer[A, B] = 
-    ${ deriveProductTransformerMacro[A, B] }
+  inline def getTransformer[A, B]: ReproTransformer[A, B] = ${ getTransformerMacro[A, B] }
 
-  def deriveProductTransformerMacro[A: Type, B: Type](using Quotes): Expr[ReproTransformer[A, B]] =
-    '{ value => ${ transformProductMacro[A, B]('value) } }
-
-  def transformProductMacro[A: Type, B: Type](source: Expr[A])(using Quotes): Expr[B] = {
+  def getTransformerMacro[A, B](using quotes: Quotes, A: Type[A], B: Type[B]) = {
     import quotes.reflect.*
 
-    val sourceTpe = TypeRepr.of[A]
-    val destTpe = TypeRepr.of[B]
-
-    def fields(tpe: TypeRepr) =
-      tpe.typeSymbol.caseFields
-        .map(sym => sym.name -> tpe.memberType(sym))
-        .toMap
-
-    def accessField(source: Expr[A], name: String) = Select.unique(source.asTerm, name)
-
-    val sourceFields = fields(sourceTpe)
-    val destFields = fields(destTpe)
-
-    val fieldTransformations =
-      sourceFields.map { (name, sourceTpe) =>
-        val destTpe = destFields(name)
-        (sourceTpe.asType -> destTpe.asType) match {
-          case '[src] -> '[dest] =>
-            val transformer = Expr.summon[ReproTransformer[src, dest]].getOrElse(report.errorAndAbort(s"Not found for $name"))
-            transformer match {
-              case '{ $transformer: ReproTransformer[a, b] } =>
-                val field = accessField(source, name).asExprOf[a]
-                NamedArg(name, '{ $transformer.transform($field) }.asTerm)
-            }
+    val transformer = (A -> B) match {
+      case '[a] -> '[b] => 
+        val summoned = Expr.summon[ReproTransformer[a, b]].get
+// ----------- INTERESTING STUFF STARTS HERE
+        summoned match {
+          case '{ $t: ReproTransformer[src, dest] } => t
         }
-      }.toList
-
-    val constructorSym = destTpe.typeSymbol.primaryConstructor
-    New(Inferred(destTpe)).select(constructorSym).appliedToArgs(fieldTransformations).asExprOf[B]
+// ----------- INTERESTING STUFF ENDS HERE
+    }
+    transformer.asExprOf[ReproTransformer[A, B]]
   }
 }
