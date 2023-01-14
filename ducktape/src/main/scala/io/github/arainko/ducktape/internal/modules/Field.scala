@@ -3,6 +3,7 @@ package io.github.arainko.ducktape.internal.modules
 import io.github.arainko.ducktape.Transformer
 
 import scala.quoted.*
+import io.github.arainko.ducktape.PartialTransformer
 
 private[ducktape] final class Field(val name: String, val tpe: Type[?]) {
   def transformerTo(that: Field)(using Quotes): Expr[Transformer[?, ?]] = {
@@ -16,4 +17,22 @@ private[ducktape] final class Field(val name: String, val tpe: Type[?]) {
         }
     }
   }
+
+  // def partialTransformerTo[
+  //   F[+x]: Type,
+  //   PartialTransformer[f[+x], a, b] <: PartialTransformer.FailFast[f, a, b] | PartialTransformer.Accumulating[f, a, b]: Type
+  // ](
+  //   that: Field
+  // )(using Quotes): Expr[PartialTransformer[F, Any, Any]] = {
+  //   import quotes.reflect.*
+
+  //   (tpe -> that.tpe) match {
+  //     case '[src] -> '[dest] =>
+  //       Implicits.search(TypeRepr.of[PartialTransformer[F, src, dest]]) match {
+  //         case success: ImplicitSearchSuccess => success.tree.asExprOf[PartialTransformer[F, src, dest]]
+  //         case err: ImplicitSearchFailure     => report.errorAndAbort(err.explanation)
+  //       }
+  //   }
+  // }
+
 }
