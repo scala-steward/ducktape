@@ -41,6 +41,33 @@ object PartialProductTransformations {
   inline def usage(inline values: Option[Int]*): Option[List[Int]] =
     ${ usageProxy('values) }
 
+  def unnestTuple(value: Expr[((Int, Int), Int)])(using Quotes) = {
+    import quotes.reflect.*
+
+    val destructor = Select.unique('{ Tuple2 }.asTerm, "unapply")
+
+    val term = value.asTerm
+
+    val elem1 = Symbol.newBind(Symbol.spliceOwner, "elem1", Flags.Local, TypeRepr.of[Int])
+    val elem2 = Symbol.newBind(Symbol.spliceOwner, "elem2", Flags.Local, TypeRepr.of[Int])
+    val elem3 = Symbol.newBind(Symbol.spliceOwner, "elem3", Flags.Local, TypeRepr.of[Int])
+
+    val innerDestruct = Unapply(destructor, Nil, List(Bind(elem1, Wildcard()), Bind(elem2, Wildcard())))
+
+    val destruct = Unapply(destructor, Nil, List(innerDestruct, Bind(elem3, Wildcard())))
+
+    Match(
+      term, 
+      List(
+        CaseDef(
+          destruct, None, Ref(elem1)
+        )
+      )
+    ).asExprOf[Int]
+  }
+
+  inline def unnestUsage(value: ((Int, Int), Int)) = ${ unnestTuple('value) }
+
   // private def fieldTransformations[F[+x]: Type, Source: Type](
   //   support: Expr[PartialTransformer.FailFast.Support[F]],
   //   sourceValue: Expr[Source],

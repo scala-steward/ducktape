@@ -14,5 +14,7 @@ object Playground extends App {
     Some(1).zip(Some(2)).zip(Some(3)).map { case ((one, two), three) => List(one, two, three) }
     )
 
+  val cos3 = DebugMacros.code(PartialProductTransformations.unnestUsage(1 -> 2 -> 3))
+
   println(cos)
 }
