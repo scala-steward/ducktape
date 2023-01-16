@@ -3,6 +3,10 @@ package io.github.arainko.ducktape
 import io.github.arainko.ducktape.internal.*
 import io.github.arainko.ducktape.internal.macros.*
 
+final case class Person(name: String, age: Int)
+
+final case class PersonOpt(name: Option[String], age: Option[Int])
+
 object Playground extends App {
   val cos = 
     Transformer.Debug.showCode(
@@ -16,5 +20,11 @@ object Playground extends App {
 
   val cos3 = DebugMacros.code(PartialProductTransformations.unnestUsage(1 -> 2 -> 3))
 
+  val personOpt = PersonOpt(Some("name"), Some(1))
+  val person = Person("name", 1)
+
+  PartialProductTransformations.transform[Option, Person, PersonOpt](person)
+
+  
   println(cos)
 }
