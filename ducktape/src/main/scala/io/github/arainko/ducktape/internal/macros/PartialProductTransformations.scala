@@ -4,6 +4,7 @@ import scala.quoted.*
 import io.github.arainko.ducktape.PartialTransformer
 import io.github.arainko.ducktape.internal.modules.*
 import scala.deriving.Mirror
+import scala.annotation.tailrec
 
 object PartialProductTransformations {
   def transformFailFast[F[+x]: Type, Source: Type, Dest: Type](
@@ -32,45 +33,42 @@ object PartialProductTransformations {
   )(using Quotes, Fields.Source) = {
     import quotes.reflect.*
 
-    val fieldsToTransformers =
-      fieldsToTransformInto.map { field =>
-        field ->
+    val transformedFields =
+      fieldsToTransformInto.map { dest =>
+        val source =
           Fields.source
-            .get(field.name)
-            .getOrElse(Failure.abort(Failure.NoFieldMapping(field.name, Type.of[Source])))
-      }.map { (dest, source) =>
-        val transformer = source.partialTransformerTo[F, PartialTransformer.FailFast](dest)
-        source.name -> transformer
-      }.toMap
+            .get(dest.name)
+            .getOrElse(Failure.abort(Failure.NoFieldMapping(dest.name, summon[Type[Source]])))
 
-    val destFieldExprs =
-      Fields.source.value
-        .map(field => field -> accessField(sourceValue, field.name).asExpr)
-        .map { (field, fieldValue) =>
-          val transformer =
-            fieldsToTransformers.get(field.name).getOrElse(report.errorAndAbort("Failed to get partial transformer")).asExpr
-          transformer match {
-            case '{ $t: PartialTransformer.FailFast[F, src, dest] } =>
-              val castedFieldValue = fieldValue.asExprOf[src]
-              field.name -> '{ $t.transform($castedFieldValue) }
-          }
+        source.partialTransformerTo[F, PartialTransformer.FailFast](dest).asExpr match {
+          case '{ $transformer: PartialTransformer.FailFast[F, src, dest] } =>
+            val sourceField = accessField(sourceValue, source.name).asExprOf[src]
+            WrappedField(dest.name, '{ $transformer.transform($sourceField) })
         }
+      }
 
-    def nestFlatMaps(expr: List[(String, Expr[F[Any]])], collectedValues: List[(String, Expr[Any])])(using
-      Quotes
-    ): Expr[F[Dest]] = {
+    def nestFlatMaps(
+      wrappedFields: List[WrappedField[F]],
+      collectedValues: List[UnwrappedField]
+    )(using Quotes): Expr[F[Dest]] = {
       import quotes.reflect.*
 
-      expr match {
-        case (name, value) :: Nil =>
+      wrappedFields match {
+        case WrappedField(name, value) :: Nil =>
           value match {
-            case '{ $v: F[a] } => '{ $support.map[`a`, Dest]($v, a => ${ construct((name, 'a) :: collectedValues) }) }
+            case '{ $value: F[destField] } =>
+              '{ $support.map[`destField`, Dest]($value, a => ${ construct(UnwrappedField(name, 'a) :: collectedValues) }) }
           }
 
-        case (name, value) :: next =>
+        case WrappedField(name, value) :: next =>
           value match {
-            case '{ $v: F[a] } =>
-              '{ $support.flatMap[`a`, Dest]($v, a => ${ nestFlatMaps(next, (name, 'a) :: collectedValues) }) }
+            case '{ $value: F[destField] } =>
+              '{
+                $support.flatMap[`destField`, Dest](
+                  $value,
+                  a => ${ nestFlatMaps(next, UnwrappedField(name, 'a) :: collectedValues) }
+                )
+              }
           }
 
         case Nil =>
@@ -79,18 +77,22 @@ object PartialProductTransformations {
       }
     }
 
-    def construct(fieldValues: List[(String, Expr[Any])])(using Quotes) = {
+    def construct(fieldValues: List[UnwrappedField])(using Quotes) = {
       import quotes.reflect.*
-      val namedArgs = fieldValues.map((name, value) => NamedArg(name, value.asTerm))
+      val namedArgs = fieldValues.map(field => NamedArg(field.name, field.value.asTerm))
       constructor(TypeRepr.of[Dest]).appliedToArgs(namedArgs).asExprOf[Dest]
     }
 
-    val term = nestFlatMaps(destFieldExprs, Nil).asTerm
+    val term = nestFlatMaps(transformedFields, Nil).asTerm
     println()
     println(term.show(using Printer.TreeShortCode))
     println()
     term.asExprOf[F[Dest]]
   }
+
+  private final case class WrappedField[F[+x]](name: String, value: Expr[F[Any]])
+
+  private final case class UnwrappedField(name: String, value: Expr[Any])
 
   // TODO: Extract into a separate file
   private def accessField(value: Expr[Any], fieldName: String)(using Quotes) = {

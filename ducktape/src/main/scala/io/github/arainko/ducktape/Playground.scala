@@ -5,7 +5,7 @@ import io.github.arainko.ducktape.internal.macros.*
 
 final case class Person(name: String, age: Int, additional: Int)
 
-final case class PersonRefined(name: newtypes.Name, age: newtypes.Age, additional: Int)
+final case class PersonRefined(name: newtypes.Name)
 
 
 object newtypes {
@@ -39,7 +39,7 @@ object Playground extends App {
   // val personOpt = PersonOpt(Some("name"), Some(1))
   val person = Person("name", 1, 1)
 
-  println(PartialProductTransformations.transform[Option, Person, PersonRefined](person))
+  DebugMacros.code(PartialProductTransformations.transform[Option, Person, PersonRefined](person))
 
   
   // println(cos)
