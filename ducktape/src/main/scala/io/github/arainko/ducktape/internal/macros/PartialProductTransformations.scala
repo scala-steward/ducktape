@@ -22,7 +22,7 @@ object PartialProductTransformations {
 
   inline def transform[F[+x], Source, Dest](
     sourceValue: Source
-  )(using support: PartialTransformer.FailFast.Support[F], Source: Mirror.ProductOf[Source], Dest: Mirror.ProductOf[Dest]) = 
+  )(using support: PartialTransformer.FailFast.Support[F], Source: Mirror.ProductOf[Source], Dest: Mirror.ProductOf[Dest]) =
     ${ transformFailFast[F, Source, Dest]('Source, 'Dest, 'support, 'sourceValue) }
 
   private def fieldTransformations[F[+x]: Type, Source: Type, Dest: Type](
@@ -58,23 +58,38 @@ object PartialProductTransformations {
 
     def nestFlatMaps(expr: List[(String, Expr[F[Any]])], collectedValues: List[(String, Expr[Any])])(using
       Quotes
-    ): Expr[F[Any]] = {
+    ): Expr[F[Dest]] = {
       import quotes.reflect.*
 
       expr match {
+        case (name, value) :: Nil =>
+          value match {
+            case '{ $v: F[a] } => '{ $support.map[`a`, Dest]($v, a => ${ construct((name, 'a) :: collectedValues) }) }
+          }
+
         case (name, value) :: next =>
           value match {
-            case '{ $v: F[a] } => '{ $support.flatMap($v, a => ${ nestFlatMaps(next, (name, 'a) :: collectedValues) }) }
+            case '{ $v: F[a] } =>
+              '{ $support.flatMap[`a`, Dest]($v, a => ${ nestFlatMaps(next, (name, 'a) :: collectedValues) }) }
           }
-          
+
         case Nil =>
-          val namedArgs = collectedValues.map((name, value) => NamedArg(name, value.asTerm))
-          val constructedValue = constructor(TypeRepr.of[Dest]).appliedToArgs(namedArgs).asExpr
-          '{ $support.pure($constructedValue) }
+          val constructedValue = construct(collectedValues)
+          '{ $support.pure[Dest]($constructedValue) }
       }
     }
 
-    nestFlatMaps(destFieldExprs, Nil).asExprOf[F[Dest]]
+    def construct(fieldValues: List[(String, Expr[Any])])(using Quotes) = {
+      import quotes.reflect.*
+      val namedArgs = fieldValues.map((name, value) => NamedArg(name, value.asTerm))
+      constructor(TypeRepr.of[Dest]).appliedToArgs(namedArgs).asExprOf[Dest]
+    }
+
+    val term = nestFlatMaps(destFieldExprs, Nil).asTerm
+    println()
+    println(term.show(using Printer.TreeShortCode))
+    println()
+    term.asExprOf[F[Dest]]
   }
 
   // TODO: Extract into a separate file
