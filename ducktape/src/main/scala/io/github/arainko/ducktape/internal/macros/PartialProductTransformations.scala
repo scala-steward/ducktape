@@ -132,59 +132,57 @@ object PartialProductTransformations {
 
   private final case class UnwrappedField(name: String, value: Expr[Any])
 
-  private def unnestPairs[F[+x]: Type](fields: List[Field], nestedPairs: Expr[F[Any]])(using Quotes) = {
+  private def unnestPairs(fields: List[Field], nestedPairs: Expr[Any])(using Quotes) = {
     import quotes.reflect.*
 
-    val destructor = Select.unique('{ Tuple2 }.asTerm, "unapply")
+    val Tuple2Extractor = Select.unique('{ Tuple2 }.asTerm, "unapply")
 
-    def recurse(fields: List[Field], collectedFields: List[UnwrappedField], unapplyPatterns: List[Term])(using Quotes): (List[UnwrappedField], Option[Unapply]) =
+    /*
+    Tuple2(Tuple2(Tuple2(field1, field2), field3), field4)
+
+    Unapply(Tuple2Extractor, Nil, Unapply(Tuple2Extractor, Nil, Unapply(Tuple2Extractor, Nil, field1 :: field2 :: Nil) :: field3 :: Nil) :: field4 :: Nil)
+
+    so, you need to start generation from the last elem
+    if there are two elems left return an Unapply with two binds instead of recursing
+     */
+
+    def recurse(
+      fields: List[Field],
+      collectedFields: List[UnwrappedField]
+    )(using Quotes): Option[Unapply | Bind] =
       fields match {
-        case field :: Nil => 
-          val bindSymbol = Symbol.newBind(Symbol.spliceOwner, field.name, Flags.Local, TypeRepr.of(using field.tpe))
-          val unwrappedFields = UnwrappedField(field.name, Ref(bindSymbol).asExpr) :: collectedFields
-          unwrappedFields -> Some(Bind(bindSymbol, Wildcard()) :: unapplyPatterns))
-        case field :: next => 
-          val bindSymbol = Symbol.newBind(Symbol.spliceOwner, field.name, Flags.Local, TypeRepr.of(using field.tpe))
-          val unwrappedValue = Ref(bindSymbol).asExpr
-          val currentUnapply = recurse(next, UnwrappedField(field.name, unwrappedValue) :: collectedFields)
+        case first :: second :: Nil => // Unapply with two binds
+          val firstBind = Symbol.newBind(Symbol.spliceOwner, first.name, Flags.Local, TypeRepr.of(using first.tpe))
+          val secondBind = Symbol.newBind(Symbol.spliceOwner, second.name, Flags.Local, TypeRepr.of(using second.tpe))
+          Some(Unapply(Tuple2Extractor, Nil, Bind(secondBind, Wildcard()) :: Bind(firstBind, Wildcard()) :: Nil))
 
-        case Nil => collectedFields -> None
+        case single :: Nil =>
+          val bind = Symbol.newBind(Symbol.spliceOwner, single.name, Flags.Local, TypeRepr.of(using single.tpe))
+          Some(Bind(bind, Wildcard()))
+
+        case single :: next =>
+          val bind = Symbol.newBind(Symbol.spliceOwner, single.name, Flags.Local, TypeRepr.of(using single.tpe))
+          recurse(next, collectedFields).map(pattern => Unapply(Tuple2Extractor, Nil, pattern :: Bind(bind, Wildcard()) :: Nil))
+
+        case Nil => None
       }
 
+    recurse(fields.reverse, Nil).map(pattern => Match(nestedPairs.asTerm, List(CaseDef(pattern, None, Literal(IntConstant(1))))))
   }
 
-  def unnestTuple(value: Expr[((Int, Int), Int)])(using Quotes) = {
+  def unnestTuple(value: Expr[Any])(using Quotes) = {
     import quotes.reflect.*
 
-    val destructor = Select.unique('{ Tuple2 }.asTerm, "unapply")
+    val fields = List(
+      Field("elem1", Type.of[Int]),
+      Field("elem2", Type.of[Int]),
+      Field("elem3", Type.of[Int]),
+      Field("elem4", Type.of[Int]),
+      Field("elem5", Type.of[Int]),
+    )
 
-    val term = value.asTerm
-
-    val elem1 = Symbol.newBind(Symbol.spliceOwner, "elem1", Flags.Local, TypeRepr.of[Int])
-    val elem2 = Symbol.newBind(Symbol.spliceOwner, "elem2", Flags.Local, TypeRepr.of[Int])
-    val elem3 = Symbol.newBind(Symbol.spliceOwner, "elem3", Flags.Local, TypeRepr.of[Int])
-
-    val destruct = 
-      Unapply(
-        destructor,
-        Nil,
-        List(
-          Unapply(destructor, Nil, List(Bind(elem1, Wildcard()), Bind(elem2, Wildcard()))),
-          Bind(elem3, Wildcard())
-        )
-      )
-
-    Match(
-      term,
-      List(
-        CaseDef(
-          destruct,
-          None,
-          Ref(elem1)
-        )
-      )
-    ).asExprOf[Int]
+    unnestPairs(fields, value).get.asExprOf[Int]
   }
 
-  inline def unnestUsage(value: ((Int, Int), Int)) = ${ unnestTuple('value) }
+  inline def unnestUsage(value: Any) = ${ unnestTuple('value) }
 }

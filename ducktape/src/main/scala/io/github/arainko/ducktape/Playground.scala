@@ -34,7 +34,7 @@ object Playground extends App {
   //   Some(1).zip(Some(2)).zip(Some(3)).map { case ((one, two), three) => List(one, two, three) }
   //   )
 
-  // val cos3 = DebugMacros.code(PartialProductTransformations.unnestUsage(1 -> 2 -> 3))
+  val cos3 = DebugMacros.code(PartialProductTransformations.unnestUsage(1))
 
   // val personOpt = PersonOpt(Some("name"), Some(1))
   val person = Person("name", 1, 1)
@@ -43,6 +43,12 @@ object Playground extends App {
 
 
   val cos2 = support.product(support.product(Right(1), Right(2)), Right(3))
+
+  DebugMacros.structure(
+    "asd" match {
+      case str => str
+    }
+  )
 
   DebugMacros.code(PartialProductTransformations.transform[Option, Person, PersonRefined](person))
 
