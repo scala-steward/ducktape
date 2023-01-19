@@ -5,7 +5,7 @@ import io.github.arainko.ducktape.internal.macros.*
 
 final case class Person(name: String, age: Int, additional: Int)
 
-final case class PersonRefined(age: newtypes.Age, name: newtypes.Name)
+final case class PersonRefined(age: newtypes.Age, name: newtypes.Name, additional: newtypes.Age)
 
 
 object newtypes {
@@ -13,17 +13,24 @@ object newtypes {
 
   object Name {
     given refineName: PartialTransformer.FailFast[Option, String, Name] = Some(_)
+    given refineName2: PartialTransformer.Accumulating[[A] =>> Either[::[String], A], String, Name] = Right(_)
   }
 
   opaque type Age = Int
 
   object Age {
     given refineAge: PartialTransformer.FailFast[Option, Int, Age] = _ => None
+    given refineAge2: PartialTransformer.Accumulating[[A] =>> Either[::[String], A], Int, Age] = Right(_)
   }
+}
+
+object BetterTuple2Extractor {
+  def unapply[A, B](tuple: (A, B)): (A, B) = tuple
 }
 
 
 object Playground extends App {
+
   // val cos = 
   //   Transformer.Debug.showCode(
   //   PartialProductTransformations.usage(Some(1), None, Some(2), Some(3))
@@ -34,7 +41,7 @@ object Playground extends App {
   //   Some(1).zip(Some(2)).zip(Some(3)).map { case ((one, two), three) => List(one, two, three) }
   //   )
 
-  val cos3 = DebugMacros.code(PartialProductTransformations.unnestUsage(1))
+  // val cos3 = DebugMacros.code(PartialProductTransformations.unnestUsage(1))
 
   // val personOpt = PersonOpt(Some("name"), Some(1))
   val person = Person("name", 1, 1)
@@ -51,6 +58,8 @@ object Playground extends App {
   )
 
   DebugMacros.code(PartialProductTransformations.transform[Option, Person, PersonRefined](person))
+
+  DebugMacros.code(PartialProductTransformations.transformAccumulating[[A] =>> Either[::[String], A], Person, PersonRefined](person))
 
   
   // println(cos)

@@ -21,10 +21,29 @@ object PartialProductTransformations {
     failFastFieldTransformations[F, Source, Dest](support, sourceValue, Fields.dest.value)
   }
 
+  def transformAcc[F[+x]: Type, Source: Type, Dest: Type](
+    Source: Expr[Mirror.ProductOf[Source]],
+    Dest: Expr[Mirror.ProductOf[Dest]],
+    support: Expr[PartialTransformer.Accumulating.Support[F]],
+    sourceValue: Expr[Source]
+  )(using Quotes): Expr[F[Dest]] = {
+    import quotes.reflect.*
+
+    given Fields.Source = Fields.Source.fromMirror(Source)
+    given Fields.Dest = Fields.Dest.fromMirror(Dest)
+
+    accumulatingFieldTransformations[F, Source, Dest](support, sourceValue, Fields.dest.value).get
+  }
+
   inline def transform[F[+x], Source, Dest](
     sourceValue: Source
   )(using support: PartialTransformer.FailFast.Support[F], Source: Mirror.ProductOf[Source], Dest: Mirror.ProductOf[Dest]) =
     ${ transformFailFast[F, Source, Dest]('Source, 'Dest, 'support, 'sourceValue) }
+
+  inline def transformAccumulating[F[+x], Source, Dest](
+    sourceValue: Source
+  )(using support: PartialTransformer.Accumulating.Support[F], Source: Mirror.ProductOf[Source], Dest: Mirror.ProductOf[Dest]) =
+    ${ transformAcc[F, Source, Dest]('Source, 'Dest, 'support, 'sourceValue) }
 
   private def failFastFieldTransformations[F[+x]: Type, Source: Type, Dest: Type](
     support: Expr[PartialTransformer.FailFast.Support[F]],
@@ -64,15 +83,25 @@ object PartialProductTransformations {
             .get(dest.name)
             .getOrElse(Failure.abort(Failure.NoFieldMapping(dest.name, summon[Type[Source]])))
 
-        source.partialTransformerTo[F, PartialTransformer.FailFast](dest).asExpr match {
-          case '{ $transformer: PartialTransformer.FailFast[F, src, dest] } =>
+        source.partialTransformerTo[F, PartialTransformer.Accumulating](dest).asExpr match {
+          case '{ $transformer: PartialTransformer.Accumulating[F, src, dest] } =>
             val sourceField = sourceValue.accessField(source).asExprOf[src]
             WrappedField(dest.name, '{ $transformer.transform($sourceField) })
         }
       }
 
-    // zipFields[F, Dest](support, transformedFields)
-    ???
+    // val (pattern, unwrappedFields) = unnestPairs(fieldsToTransformInto, )
+
+    def unnest(expr: Expr[Any])(using Quotes) = unnestPairs[Dest](fieldsToTransformInto, expr).get
+
+    zipFields[F, Dest](support, transformedFields)
+      .map(zipped =>
+        zipped match {
+          case '{ $zipped: F[a] } =>
+            '{ $support.map($zipped, pairs => ${ unnest('pairs) }) }
+        }
+      )
+    // ???
   }
 
   private def nestFlatMaps[F[+x]: Type, Dest: Type](
@@ -118,7 +147,7 @@ object PartialProductTransformations {
     wrappedFields.map(_.value).reduceLeftOption { (accumulated, current) =>
       (accumulated -> current) match {
         case '{ $accumulated: F[a] } -> '{ $current: F[b] } =>
-          '{ $support.product($accumulated, $current) }
+          '{ $support.product[`a`, `b`]($accumulated, $current) }
       }
     }
 
@@ -132,7 +161,7 @@ object PartialProductTransformations {
 
   private final case class UnwrappedField(name: String, value: Expr[Any])
 
-  private def unnestPairs(fields: List[Field], nestedPairs: Expr[Any])(using Quotes) = {
+  private def unnestPairs[Dest: Type](fields: List[Field], nestedPairs: Expr[Any])(using Quotes) = {
     import quotes.reflect.*
 
     val Tuple2Extractor = Select.unique('{ Tuple2 }.asTerm, "unapply")
@@ -146,43 +175,53 @@ object PartialProductTransformations {
     if there are two elems left return an Unapply with two binds instead of recursing
      */
 
+    // TODO: Can this be tail recursive somehow?
     def recurse(
-      fields: List[Field],
-      collectedFields: List[UnwrappedField]
-    )(using Quotes): Option[Unapply | Bind] =
+      fields: List[Field]
+      // collectedFields: List[UnwrappedField]
+    )(using Quotes): Option[(Unapply | Bind, List[UnwrappedField])] =
       fields match {
         case first :: second :: Nil => // Unapply with two binds
           val firstBind = Symbol.newBind(Symbol.spliceOwner, first.name, Flags.Local, TypeRepr.of(using first.tpe))
           val secondBind = Symbol.newBind(Symbol.spliceOwner, second.name, Flags.Local, TypeRepr.of(using second.tpe))
-          Some(Unapply(Tuple2Extractor, Nil, Bind(secondBind, Wildcard()) :: Bind(firstBind, Wildcard()) :: Nil))
+          val fields =
+            UnwrappedField(first.name, Ref(firstBind).asExpr) :: UnwrappedField(second.name, Ref(secondBind).asExpr) :: Nil
+          val extractor = Unapply(Tuple2Extractor, Nil, Bind(secondBind, Wildcard()) :: Bind(firstBind, Wildcard()) :: Nil)
+          Some(extractor -> fields)
 
         case single :: Nil =>
           val bind = Symbol.newBind(Symbol.spliceOwner, single.name, Flags.Local, TypeRepr.of(using single.tpe))
-          Some(Bind(bind, Wildcard()))
+          Some(Bind(bind, Wildcard()) -> (UnwrappedField(single.name, Ref(bind).asExpr) :: Nil))
 
         case single :: next =>
           val bind = Symbol.newBind(Symbol.spliceOwner, single.name, Flags.Local, TypeRepr.of(using single.tpe))
-          recurse(next, collectedFields).map(pattern => Unapply(Tuple2Extractor, Nil, pattern :: Bind(bind, Wildcard()) :: Nil))
+          recurse(next).map { (pattern, fields) =>
+            val extractor = Unapply(Tuple2Extractor, Nil, pattern :: Bind(bind, Wildcard()) :: Nil)
+            val fields = UnwrappedField(single.name, Ref(bind).asExpr) :: Nil
+            extractor -> fields
+          }
 
         case Nil => None
       }
 
-    recurse(fields.reverse, Nil).map(pattern => Match(nestedPairs.asTerm, List(CaseDef(pattern, None, Literal(IntConstant(1))))))
+    recurse(fields.reverse).map { (pattern, unwrappedFields) =>
+      Match(nestedPairs.asTerm, List(CaseDef(pattern, None, construct[Dest](unwrappedFields).asTerm))).asExprOf[Dest]
+    }
   }
 
-  def unnestTuple(value: Expr[Any])(using Quotes) = {
-    import quotes.reflect.*
+  // def unnestTuple(value: Expr[Any])(using Quotes) = {
+  //   import quotes.reflect.*
 
-    val fields = List(
-      Field("elem1", Type.of[Int]),
-      Field("elem2", Type.of[Int]),
-      Field("elem3", Type.of[Int]),
-      Field("elem4", Type.of[Int]),
-      Field("elem5", Type.of[Int]),
-    )
+  //   val fields = List(
+  //     Field("elem1", Type.of[Int]),
+  //     Field("elem2", Type.of[Int]),
+  //     Field("elem3", Type.of[Int]),
+  //     Field("elem4", Type.of[Int]),
+  //     Field("elem5", Type.of[Int])
+  //   )
 
-    unnestPairs(fields, value).get.asExprOf[Int]
-  }
+  //   unnestPairs(fields, value).get.asExprOf[Int]
+  // }
 
-  inline def unnestUsage(value: Any) = ${ unnestTuple('value) }
+  // inline def unnestUsage(value: Any) = ${ unnestTuple('value) }
 }
