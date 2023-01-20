@@ -166,6 +166,8 @@ object PartialProductTransformations {
 
     val Tuple2Extractor = Select.unique('{ Tuple2 }.asTerm, "unapply")
 
+
+
     /*
     Tuple2(Tuple2(Tuple2(field1, field2), field3), field4)
 
@@ -182,11 +184,13 @@ object PartialProductTransformations {
     )(using Quotes): Option[(Unapply | Bind, List[UnwrappedField])] =
       fields match {
         case first :: second :: Nil => // Unapply with two binds
-          val firstBind = Symbol.newBind(Symbol.spliceOwner, first.name, Flags.Local, TypeRepr.of(using first.tpe))
-          val secondBind = Symbol.newBind(Symbol.spliceOwner, second.name, Flags.Local, TypeRepr.of(using second.tpe))
+          val firstTpe = TypeRepr.of(using first.tpe)
+          val secondTpe = TypeRepr.of(using second.tpe)
+          val firstBind = Symbol.newBind(Symbol.spliceOwner, first.name, Flags.Local, firstTpe)
+          val secondBind = Symbol.newBind(Symbol.spliceOwner, second.name, Flags.Local, secondTpe)
           val fields =
             UnwrappedField(first.name, Ref(firstBind).asExpr) :: UnwrappedField(second.name, Ref(secondBind).asExpr) :: Nil
-          val extractor = Unapply(Tuple2Extractor, Nil, Bind(secondBind, Wildcard()) :: Bind(firstBind, Wildcard()) :: Nil)
+          val extractor = Unapply(Tuple2Extractor.appliedToTypes(secondTpe :: firstTpe :: Nil), Nil, Bind(secondBind, Wildcard()) :: Bind(firstBind, Wildcard()) :: Nil)
           Some(extractor -> fields)
 
         case single :: Nil =>
@@ -195,9 +199,9 @@ object PartialProductTransformations {
 
         case single :: next =>
           val bind = Symbol.newBind(Symbol.spliceOwner, single.name, Flags.Local, TypeRepr.of(using single.tpe))
-          recurse(next).map { (pattern, fields) =>
+          recurse(next).map { (pattern, collectedFields) =>
             val extractor = Unapply(Tuple2Extractor, Nil, pattern :: Bind(bind, Wildcard()) :: Nil)
-            val fields = UnwrappedField(single.name, Ref(bind).asExpr) :: Nil
+            val fields = UnwrappedField(single.name, Ref(bind).asExpr) :: collectedFields
             extractor -> fields
           }
 
