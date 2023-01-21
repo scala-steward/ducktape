@@ -35,3 +35,9 @@ private[ducktape] final class Field(val name: String, val tpe: Type[?]) {
   }
 
 }
+
+private[ducktape] object Field {
+  final case class Unwrapped(underlying: Field, value: Expr[Any])
+
+  final case class Wrapped[F[+x]](underlying: Field, value: Expr[F[Any]])
+}
