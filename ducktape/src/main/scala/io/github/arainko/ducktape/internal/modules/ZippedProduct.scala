@@ -22,13 +22,16 @@ object ZippedProduct {
    *
    * and a list of unwrapped fields that allow you to operate on the bound values of the pattern match.
    */
-  def unzip(nestedPairs: Expr[Any], fields: List[Field])(using Quotes) = {
+  def unzip(
+    nestedPairs: Expr[Any],
+    fields: List[Field] //This should be a NonEmptyList but it's such a pain in the ass to work with it...
+  )(using Quotes): (quotes.reflect.Unapply | quotes.reflect.Bind, List[Unwrapped]) = {
     import quotes.reflect.*
 
     def recurse(
       tpe: Type[?],
       leftoverFields: List[Field]
-      )(using Quotes): Option[(quotes.reflect.Unapply | quotes.reflect.Bind, List[Field.Unwrapped])] = {
+    )(using Quotes): (quotes.reflect.Unapply | quotes.reflect.Bind, List[Field.Unwrapped]) = {
       import quotes.reflect.*
 
       (tpe -> leftoverFields) match {
@@ -41,26 +44,27 @@ object ZippedProduct {
             List(Field.Unwrapped(secondField, Ref(secondBind).asExpr), Field.Unwrapped(firstField, Ref(firstBind).asExpr))
           val extractor =
             Unapply(Tuple2Extractor(secondTpe, firstTpe), Nil, Bind(secondBind, Wildcard()) :: Bind(firstBind, Wildcard()) :: Nil)
-          Some(extractor -> fields)
+          extractor -> fields
 
-        case ('[tpe], field :: Nil) => 
+        case ('[tpe], field :: Nil) =>
           val tpe = TypeRepr.of(using field.tpe)
           val bind = Symbol.newBind(Symbol.spliceOwner, field.name, Flags.Local, tpe)
-          Some(Bind(bind, Wildcard()) -> (Field.Unwrapped(field, Ref(bind).asExpr) :: Nil))
+          Bind(bind, Wildcard()) -> (Field.Unwrapped(field, Ref(bind).asExpr) :: Nil)
 
         case ('[Tuple2[rest, current]], field :: tail) =>
           val restTpe = TypeRepr.of[rest]
           val currentTpe = TypeRepr.of[current]
           val pairExtractor = Tuple2Extractor(restTpe, currentTpe)
           val bind = Symbol.newBind(Symbol.spliceOwner, field.name, Flags.Local, currentTpe)
-          recurse(summon[Type[rest]], tail).map { (pattern, unzippedFields) =>
-            val extractor = Unapply(pairExtractor, Nil, pattern :: Bind(bind, Wildcard()) :: Nil)
-            val fields = Field.Unwrapped(field, Ref(bind).asExpr) :: unzippedFields
-            extractor -> fields
-          }
+          val (pattern, unzippedFields) = recurse(summon[Type[rest]], tail)
+          val extractor = Unapply(pairExtractor, Nil, pattern :: Bind(bind, Wildcard()) :: Nil)
+          val fields = Field.Unwrapped(field, Ref(bind).asExpr) :: unzippedFields
+          extractor -> fields
 
+        case (tpe, fields) =>
+          val printedType = TypeRepr.of(using tpe).show
+          report.errorAndAbort(s"Unexpected state reached while unzipping a product, tpe: $printedType, fields: ${fields}")
 
-        case _ => None
       }
     }
 
@@ -76,35 +80,3 @@ object ZippedProduct {
   }
 
 }
-
-/*
-def recurse(
-      fields: List[Field]
-      // collectedFields: List[UnwrappedField]
-    )(using Quotes): Option[(Unapply | Bind, List[UnwrappedField])] =
-      fields match {
-        case first :: second :: Nil => // Unapply with two binds
-          val firstTpe = TypeRepr.of(using first.tpe)
-          val secondTpe = TypeRepr.of(using second.tpe)
-          val firstBind = Symbol.newBind(Symbol.spliceOwner, first.name, Flags.Local, firstTpe)
-          val secondBind = Symbol.newBind(Symbol.spliceOwner, second.name, Flags.Local, secondTpe)
-          val fields =
-            UnwrappedField(first.name, Ref(firstBind).asExpr) :: UnwrappedField(second.name, Ref(secondBind).asExpr) :: Nil
-          val extractor = Unapply(Tuple2Extractor.appliedToTypes(secondTpe :: firstTpe :: Nil), Nil, Bind(secondBind, Wildcard()) :: Bind(firstBind, Wildcard()) :: Nil)
-          Some(extractor -> fields)
-
-        case single :: Nil =>
-          val bind = Symbol.newBind(Symbol.spliceOwner, single.name, Flags.Local, TypeRepr.of(using single.tpe))
-          Some(Bind(bind, Wildcard()) -> (UnwrappedField(single.name, Ref(bind).asExpr) :: Nil))
-
-        case single :: next =>
-          val bind = Symbol.newBind(Symbol.spliceOwner, single.name, Flags.Local, TypeRepr.of(using single.tpe))
-          recurse(next).map { (pattern, collectedFields) =>
-            val extractor = Unapply(Tuple2Extractor, Nil, pattern :: Bind(bind, Wildcard()) :: Nil)
-            val fields = UnwrappedField(single.name, Ref(bind).asExpr) :: collectedFields
-            extractor -> fields
-          }
-
-        case Nil => None
-      }
- */

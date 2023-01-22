@@ -34,8 +34,6 @@ object PartialProductTransformations {
     given Fields.Dest = Fields.Dest.fromMirror(Dest)
 
     accumulatingFieldTransformations[F, Source, Dest](support, sourceValue, Fields.dest.value)
-      .get
-      .tap(exp => println(exp.asTerm.show(using Printer.TreeShortCode)))
   }
 
   inline def transform[F[+x], Source, Dest](
@@ -93,16 +91,15 @@ object PartialProductTransformations {
         }
       }
 
-    zipFields[F, Dest](support, transformedFields)
-      .map(zipped =>
-        zipped match {
+    Option
+      .when(transformedFields.nonEmpty)(::(transformedFields.head, transformedFields.tail))
+      .map { transformedFields =>
+        zipFields[F, Dest](support, transformedFields) match {
           case '{ $zipped: F[a] } =>
-            '{ $support.map($zipped, value => ${ 
-                unnestPairs[Dest](fieldsToTransformInto, 'value).get
-            }) 
-            }
+            '{ $support.map($zipped, value => ${ unzipAndConstruct[Dest](fieldsToTransformInto, 'value) }) }
         }
-      )
+      }
+      .getOrElse('{ $support.pure(${ construct[Dest](Nil) }) })
   }
 
   private def nestFlatMaps[F[+x]: Type, Dest: Type](
@@ -114,22 +111,22 @@ object PartialProductTransformations {
       collectedUnwrappedFields: List[Field.Unwrapped]
     )(using Quotes): Expr[F[Dest]] =
       leftoverWrappedFields match {
-        case Field.Wrapped(name, value) :: Nil =>
+        case Field.Wrapped(field, value) :: Nil =>
           value match {
             case '{ $value: F[destField] } =>
               '{
                 $support
-                  .map[`destField`, Dest]($value, a => ${ construct(Field.Unwrapped(name, 'a) :: collectedUnwrappedFields) })
+                  .map[`destField`, Dest]($value, a => ${ construct(Field.Unwrapped(field, 'a) :: collectedUnwrappedFields) })
               }
           }
 
-        case Field.Wrapped(name, value) :: next =>
+        case Field.Wrapped(field, value) :: next =>
           value match {
             case '{ $value: F[destField] } =>
               '{
                 $support.flatMap[`destField`, Dest](
                   $value,
-                  a => ${ recurse(next, Field.Unwrapped(name, 'a) :: collectedUnwrappedFields) }
+                  a => ${ recurse(next, Field.Unwrapped(field, 'a) :: collectedUnwrappedFields) }
                 )
               }
           }
@@ -144,9 +141,9 @@ object PartialProductTransformations {
 
   private def zipFields[F[+x]: Type, Dest: Type](
     support: Expr[PartialTransformer.Accumulating.Support[F]],
-    wrappedFields: List[Field.Wrapped[F]]
-  )(using Quotes): Option[Expr[F[Any]]] =
-    wrappedFields.map(_.value).reduceLeftOption { (accumulated, current) =>
+    wrappedFields: NonEmptyList[Field.Wrapped[F]]
+  )(using Quotes): Expr[F[Any]] =
+    wrappedFields.map(_.value).reduceLeft { (accumulated, current) =>
       (accumulated -> current) match {
         case '{ $accumulated: F[a] } -> '{ $current: F[b] } =>
           '{ $support.product[`a`, `b`]($accumulated, $current) }
@@ -159,13 +156,12 @@ object PartialProductTransformations {
     Constructor(TypeRepr.of[Dest]).appliedToArgs(namedArgs).asExprOf[Dest]
   }
 
-  private def unnestPairs[Dest: Type](fields: List[Field], nestedPairs: Expr[Any])(using Quotes) = {
+  private def unzipAndConstruct[Dest: Type](fields: List[Field], nestedPairs: Expr[Any])(using Quotes) = {
     import quotes.reflect.*
 
-    ZippedProduct
-      .unzip(nestedPairs, fields)
-      .map { (pattern, unwrappedFields) =>
-        Match(nestedPairs.asTerm, List(CaseDef(pattern, None, construct[Dest](unwrappedFields).asTerm))).asExprOf[Dest]
-      }
+    val (pattern, unwrappedFields) = ZippedProduct.unzip(nestedPairs, fields)
+    Match(nestedPairs.asTerm, CaseDef(pattern, None, construct[Dest](unwrappedFields).asTerm) :: Nil).asExprOf[Dest]
   }
+
+  private type NonEmptyList[+A] = ::[A]
 }

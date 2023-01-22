@@ -6,7 +6,7 @@ import scala.runtime.TupleMirror
 
 final case class Person(name: String, age: Int, additional: Int, int: Int)
 
-final case class PersonRefined(age: newtypes.Age)
+final case class PersonRefined(name: newtypes.Name, age: newtypes.Age, additional: Int)
 
 
 object newtypes {
