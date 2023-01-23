@@ -26,28 +26,30 @@ name := "ducktape"
 sonatypeRepository := "https://s01.oss.sonatype.org/service/local"
 sonatypeCredentialHost := "s01.oss.sonatype.org"
 
-lazy val root =
-  project
-    .in(file("."))
-    .settings(publish / skip := true)
-    .aggregate(ducktape)
+// lazy val root =
+//   project
+//     .in(file("."))
+//     .settings(publish / skip := true)
+//     .aggregate(ducktape)
 
 lazy val ducktape =
-  project
+  crossProject(JSPlatform, JVMPlatform, NativePlatform)
+    .crossType(CrossType.Pure)
     .in(file("ducktape"))
     .settings(
+      scalaVersion := "3.2.1",
       scalacOptions ++= List("-Xcheck-macros", "-no-indent", "-old-syntax", "-Xfatal-warnings", "-deprecation"),
-      libraryDependencies += "org.scalameta" %% "munit" % "1.0.0-M7" % Test,
-      mimaPreviousArtifacts := Set("io.github.arainko" %% "ducktape" % "0.1.0", "io.github.arainko" %% "ducktape" % "0.1.1")
+      libraryDependencies += "org.scalameta" %%% "munit" % "1.0.0-M7" % Test,
+      // mimaPreviousArtifacts := Set("io.github.arainko" %% "ducktape" % "0.1.0", "io.github.arainko" %% "ducktape" % "0.1.1")
     )
 
-lazy val docs =
-  project
-    .in(file("documentation"))
-    .settings(
-      mdocVariables := Map("VERSION" -> version.value),
-      libraryDependencies += ("org.scalameta" %% "scalafmt-dynamic" % "3.6.1").cross(CrossVersion.for3Use2_13),
-      publish / skip := true
-    )
-    .dependsOn(ducktape)
-    .enablePlugins(MdocPlugin)
+// lazy val docs =
+//   project
+//     .in(file("documentation"))
+//     .settings(
+//       mdocVariables := Map("VERSION" -> version.value),
+//       libraryDependencies += ("org.scalameta" %% "scalafmt-dynamic" % "3.6.1").cross(CrossVersion.for3Use2_13),
+//       publish / skip := true
+//     )
+//     .dependsOn(ducktape)
+//     .enablePlugins(MdocPlugin)
