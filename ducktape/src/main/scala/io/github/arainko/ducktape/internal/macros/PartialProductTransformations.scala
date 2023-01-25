@@ -54,13 +54,17 @@ object PartialProductTransformations {
     import quotes.reflect.*
 
     val transformedFields =
-      fieldsToTransformInto.map { dest =>
+      fieldsToTransformInto.map[Field.Wrapped[F] | Field.Unwrapped] { dest =>
         val source =
           Fields.source
             .get(dest.name)
             .getOrElse(Failure.abort(Failure.NoFieldMapping(dest.name, summon[Type[Source]])))
 
         source.partialTransformerTo[F, PartialTransformer.FailFast](dest).asExpr match {
+          case '{ PartialTransformer.FailFast.partialFromTotal[F, src, dest](using $total, $support) } =>
+            val sourceField = sourceValue.accessField(source).asExprOf[src]
+            val lifted = LiftTransformation.liftTransformation[src, dest](total, sourceField)
+            Field.Unwrapped(dest, lifted)
           case '{ $transformer: PartialTransformer.FailFast[F, src, dest] } =>
             val sourceField = sourceValue.accessField(source).asExprOf[src]
             Field.Wrapped(dest, '{ $transformer.transform($sourceField) })
@@ -104,13 +108,13 @@ object PartialProductTransformations {
 
   private def nestFlatMaps[F[+x]: Type, Dest: Type](
     support: Expr[PartialTransformer.FailFast.Support[F]],
-    wrappedFields: List[Field.Wrapped[F]]
+    wrappedFields: List[Field.Wrapped[F] | Field.Unwrapped]
   )(using Quotes): Expr[F[Dest]] = {
     def recurse(
-      leftoverWrappedFields: List[Field.Wrapped[F]],
+      leftoverFields: List[Field.Wrapped[F] | Field.Unwrapped],
       collectedUnwrappedFields: List[Field.Unwrapped]
     )(using Quotes): Expr[F[Dest]] =
-      leftoverWrappedFields match {
+      leftoverFields match {
         case Field.Wrapped(field, value) :: Nil =>
           value match {
             case '{ $value: F[destField] } =>
@@ -130,6 +134,9 @@ object PartialProductTransformations {
                 )
               }
           }
+
+        case (f: Field.Unwrapped) :: next =>
+          recurse(next, f :: collectedUnwrappedFields)
 
         case Nil =>
           val constructedValue = construct(collectedUnwrappedFields)

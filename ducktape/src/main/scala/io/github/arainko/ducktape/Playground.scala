@@ -6,7 +6,7 @@ import scala.runtime.TupleMirror
 
 final case class Person(name: String, age: Int, additional: Int, int: Int)
 
-final case class PersonRefined(name: newtypes.Name, age: newtypes.Age, additional: Int)
+final case class PersonRefined(name: String, age: Int, additional: newtypes.Age)
 
 
 object newtypes {
@@ -53,12 +53,12 @@ object Playground extends App {
 
   val cos2 = support.product(support.product(Right(1), Right(2)), Right(3))
 
-  // DebugMacros.code(PartialProductTransformations.transform[Option, Person, PersonRefined](person))
+  DebugMacros.code(PartialProductTransformations.transform[Option, Person, PersonRefined](person))
 
-  println(
+  // println(
 
-  DebugMacros.code(PartialProductTransformations.transformAccumulating[[A] =>> Either[::[String], A], Person, PersonRefined](person))
-  )
+  // DebugMacros.code(PartialProductTransformations.transformAccumulating[[A] =>> Either[::[String], A], Person, PersonRefined](person))
+  // )
 
   // println(cos)
 }
