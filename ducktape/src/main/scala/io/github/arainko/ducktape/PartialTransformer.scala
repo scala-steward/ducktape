@@ -24,10 +24,10 @@ object PartialTransformer {
   object FailFast {
     given partialFromTotal[F[+x], Source, Dest](using
       total: Transformer[Source, Dest],
-      support: Support[F]
+      F: Support[F]
     ): FailFast[F, Source, Dest] =
       new {
-        def transform(value: Source): F[Dest] = support.pure(total.transform(value))
+        def transform(value: Source): F[Dest] = F.pure(total.transform(value))
       }
 
     given betweenOption[F[+x], Source, Dest](using
@@ -70,7 +70,7 @@ object PartialTransformer {
     given derived[F[+x], Source, Dest](using
       Source: Mirror.ProductOf[Source],
       Dest: Mirror.ProductOf[Dest],
-      support: Support[F]
+      F: Support[F]
     ): FailFast[F, Source, Dest] = ???
 
     trait Support[F[+x]] {

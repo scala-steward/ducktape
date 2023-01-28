@@ -11,7 +11,7 @@ object PartialProductTransformations {
   def transformFailFast[F[+x]: Type, Source: Type, Dest: Type](
     Source: Expr[Mirror.ProductOf[Source]],
     Dest: Expr[Mirror.ProductOf[Dest]],
-    support: Expr[PartialTransformer.FailFast.Support[F]],
+    F: Expr[PartialTransformer.FailFast.Support[F]],
     sourceValue: Expr[Source]
   )(using Quotes): Expr[F[Dest]] = {
     import quotes.reflect.*
@@ -19,13 +19,13 @@ object PartialProductTransformations {
     given Fields.Source = Fields.Source.fromMirror(Source)
     given Fields.Dest = Fields.Dest.fromMirror(Dest)
 
-    failFastFieldTransformations[F, Source, Dest](support, sourceValue, Fields.dest.value)
+    failFastFieldTransformations[F, Source, Dest](F, sourceValue, Fields.dest.value)
   }
 
   def transformAcc[F[+x]: Type, Source: Type, Dest: Type](
     Source: Expr[Mirror.ProductOf[Source]],
     Dest: Expr[Mirror.ProductOf[Dest]],
-    support: Expr[PartialTransformer.Accumulating.Support[F]],
+    F: Expr[PartialTransformer.Accumulating.Support[F]],
     sourceValue: Expr[Source]
   )(using Quotes): Expr[F[Dest]] = {
     import quotes.reflect.*
@@ -33,21 +33,21 @@ object PartialProductTransformations {
     given Fields.Source = Fields.Source.fromMirror(Source)
     given Fields.Dest = Fields.Dest.fromMirror(Dest)
 
-    accumulatingFieldTransformations[F, Source, Dest](support, sourceValue, Fields.dest.value)
+    accumulatingFieldTransformations[F, Source, Dest](F, sourceValue, Fields.dest.value)
   }
 
   inline def transform[F[+x], Source, Dest](
     sourceValue: Source
-  )(using support: PartialTransformer.FailFast.Support[F], Source: Mirror.ProductOf[Source], Dest: Mirror.ProductOf[Dest]) =
-    ${ transformFailFast[F, Source, Dest]('Source, 'Dest, 'support, 'sourceValue) }
+  )(using F: PartialTransformer.FailFast.Support[F], Source: Mirror.ProductOf[Source], Dest: Mirror.ProductOf[Dest]) =
+    ${ transformFailFast[F, Source, Dest]('Source, 'Dest, 'F, 'sourceValue) }
 
   inline def transformAccumulating[F[+x], Source, Dest](
     sourceValue: Source
-  )(using support: PartialTransformer.Accumulating.Support[F], Source: Mirror.ProductOf[Source], Dest: Mirror.ProductOf[Dest]) =
-    ${ transformAcc[F, Source, Dest]('Source, 'Dest, 'support, 'sourceValue) }
+  )(using F: PartialTransformer.Accumulating.Support[F], Source: Mirror.ProductOf[Source], Dest: Mirror.ProductOf[Dest]) =
+    ${ transformAcc[F, Source, Dest]('Source, 'Dest, 'F, 'sourceValue) }
 
   private def failFastFieldTransformations[F[+x]: Type, Source: Type, Dest: Type](
-    support: Expr[PartialTransformer.FailFast.Support[F]],
+    F: Expr[PartialTransformer.FailFast.Support[F]],
     sourceValue: Expr[Source],
     fieldsToTransformInto: List[Field]
   )(using Quotes, Fields.Source) = {
@@ -71,11 +71,11 @@ object PartialProductTransformations {
         }
       }
 
-    nestFlatMaps[F, Dest](support, transformedFields)
+    nestFlatMaps[F, Dest](F, transformedFields)
   }
 
   private def accumulatingFieldTransformations[F[+x]: Type, Source: Type, Dest: Type](
-    support: Expr[PartialTransformer.Accumulating.Support[F]],
+    F: Expr[PartialTransformer.Accumulating.Support[F]],
     sourceValue: Expr[Source],
     fieldsToTransformInto: List[Field]
   )(using Quotes, Fields.Source) = {
@@ -98,17 +98,17 @@ object PartialProductTransformations {
     Option
       .when(transformedFields.nonEmpty)(::(transformedFields.head, transformedFields.tail))
       .map { transformedFields =>
-        zipFields[F, Dest](support, transformedFields) match {
+        zipFields[F, Dest](F, transformedFields) match {
           case '{ $zipped: F[a] } =>
-            '{ $support.map($zipped, value => ${ unzipAndConstruct[Dest](fieldsToTransformInto, 'value) }) }
+            '{ $F.map($zipped, value => ${ unzipAndConstruct[Dest](fieldsToTransformInto, 'value) }) }
         }
       }
-      .getOrElse('{ $support.pure(${ construct[Dest](Nil) }) })
+      .getOrElse('{ $F.pure(${ construct[Dest](Nil) }) })
   }
 
   private def nestFlatMaps[F[+x]: Type, Dest: Type](
-    support: Expr[PartialTransformer.FailFast.Support[F]],
-    wrappedFields: List[Field.Wrapped[F] | Field.Unwrapped]
+    F: Expr[PartialTransformer.FailFast.Support[F]],
+    fields: List[Field.Wrapped[F] | Field.Unwrapped]
   )(using Quotes): Expr[F[Dest]] = {
     def recurse(
       leftoverFields: List[Field.Wrapped[F] | Field.Unwrapped],
@@ -119,7 +119,7 @@ object PartialProductTransformations {
           value match {
             case '{ $value: F[destField] } =>
               '{
-                $support
+                $F
                   .map[`destField`, Dest]($value, a => ${ construct(Field.Unwrapped(field, 'a) :: collectedUnwrappedFields) })
               }
           }
@@ -128,7 +128,7 @@ object PartialProductTransformations {
           value match {
             case '{ $value: F[destField] } =>
               '{
-                $support.flatMap[`destField`, Dest](
+                $F.flatMap[`destField`, Dest](
                   $value,
                   a => ${ recurse(next, Field.Unwrapped(field, 'a) :: collectedUnwrappedFields) }
                 )
@@ -140,10 +140,10 @@ object PartialProductTransformations {
 
         case Nil =>
           val constructedValue = construct(collectedUnwrappedFields)
-          '{ $support.pure[Dest]($constructedValue) }
+          '{ $F.pure[Dest]($constructedValue) }
       }
 
-    recurse(wrappedFields, Nil)
+    recurse(fields, Nil)
   }
 
   private def zipFields[F[+x]: Type, Dest: Type](
