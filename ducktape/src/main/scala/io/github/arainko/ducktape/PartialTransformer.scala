@@ -3,18 +3,6 @@ package io.github.arainko.ducktape
 import scala.deriving.Mirror
 import scala.collection.Factory
 
-/*
-  DSL:
-    final case class BetterInt private (value: Int)
-
-    object BetterInt {
-      def create(int: Int): Option[BetterInt] = ???
-    }
-
-    val transformer: PartialTransformer[Option, Int, BetterInt] = BetterInt.create
-
- */
-
 object PartialTransformer {
   trait FailFast[F[+x], Source, Dest] {
     def transform(value: Source): F[Dest]
@@ -32,38 +20,33 @@ object PartialTransformer {
 
     given betweenOption[F[+x], Source, Dest](using
       transformer: PartialTransformer.FailFast[F, Source, Dest],
-      support: Support[F]
+      F: Support[F]
     ): FailFast[F, Option[Source], Option[Dest]] =
       new {
         def transform(value: Option[Source]): F[Option[Dest]] =
-          value.fold(support.pure(None))(source => support.map(transformer.transform(source), Some.apply))
+          value.fold(F.pure(None))(source => F.map(transformer.transform(source), Some.apply))
       }
 
     given betweenNonOptionOption[F[+x], Source, Dest](using
       transformer: PartialTransformer.FailFast[F, Source, Dest],
-      support: Support[F]
+      F: Support[F]
     ): FailFast[F, Source, Option[Dest]] =
       new {
-        def transform(value: Source): F[Option[Dest]] = support.map(transformer.transform(value), Some.apply)
+        def transform(value: Source): F[Option[Dest]] = F.map(transformer.transform(value), Some.apply)
       }
 
     // very-very naive impl, can probably lead to stack overflows given big enough collections and a data type that is not stack safe...
     given betweenCollections[F[+x], Source, Dest, SourceColl[x] <: Iterable[x], DestColl[x] <: Iterable[x]](using
       transformer: PartialTransformer.FailFast[F, Source, Dest],
-      support: Support[F],
+      F: Support[F],
       factory: Factory[Dest, DestColl[Dest]]
     ): FailFast[F, SourceColl[Source], DestColl[Dest]] =
       new {
         def transform(value: SourceColl[Source]): F[DestColl[Dest]] = {
-          val builder = factory.newBuilder
-          val traversed = value.foldLeft(support.pure(builder)) { (builder, elem) =>
-            support
-              .flatMap(
-                builder,
-                currentBuilder => support.map(transformer.transform(elem), currentBuilder += _)
-              )
+          val traversed = value.foldLeft(F.pure(factory.newBuilder)) { (builder, elem) =>
+            F.flatMap(builder, currentBuilder => F.map(transformer.transform(elem), currentBuilder += _))
           }
-          support.map(traversed, _.result())
+          F.map(traversed, _.result())
         }
       }
 
@@ -104,10 +87,42 @@ object PartialTransformer {
 
     given partialFromTotal[F[+x], Source, Dest](using
       total: Transformer[Source, Dest],
-      support: Support[F]
+      F: Support[F]
     ): Accumulating[F, Source, Dest] =
       new {
-        def transform(value: Source): F[Dest] = support.pure(total.transform(value))
+        def transform(value: Source): F[Dest] = F.pure(total.transform(value))
+      }
+
+    given betweenOption[F[+x], Source, Dest](using
+      transformer: PartialTransformer.Accumulating[F, Source, Dest],
+      F: Support[F]
+    ): Accumulating[F, Option[Source], Option[Dest]] =
+      new {
+        def transform(value: Option[Source]): F[Option[Dest]] =
+          value.fold(F.pure(None))(source => F.map(transformer.transform(source), Some.apply))
+      }
+
+    given betweenNonOptionOption[F[+x], Source, Dest](using
+      transformer: PartialTransformer.Accumulating[F, Source, Dest],
+      F: Support[F]
+    ): Accumulating[F, Source, Option[Dest]] =
+      new {
+        def transform(value: Source): F[Option[Dest]] = F.map(transformer.transform(value), Some.apply)
+      }
+
+    // very-very naive impl, can probably lead to stack overflows given big enough collections and a data type that is not stack safe...
+    given betweenCollections[F[+x], Source, Dest, SourceColl[x] <: Iterable[x], DestColl[x] <: Iterable[x]](using
+      transformer: PartialTransformer.Accumulating[F, Source, Dest],
+      F: Support[F],
+      factory: Factory[Dest, DestColl[Dest]]
+    ): Accumulating[F, SourceColl[Source], DestColl[Dest]] =
+      new {
+        def transform(value: SourceColl[Source]): F[DestColl[Dest]] = {
+          val traversed = value.foldLeft(F.pure(factory.newBuilder)) { (builder, elem) =>
+            F.map(F.product(builder, transformer.transform(elem)), _ += _)
+          }
+          F.map(traversed, _.result())
+        }
       }
 
     trait Support[F[+x]] {
@@ -126,6 +141,22 @@ object PartialTransformer {
             case (Right(_), err @ Left(_))      => err.asInstanceOf[Either[::[E], (A, B)]]
             case (err @ Left(_), Right(_))      => err.asInstanceOf[Either[::[E], (A, B)]]
             case (Left(errorsA), Left(errorsB)) => Left((errorsA ::: errorsB).asInstanceOf[::[E]])
+          }
+      }
+
+    given eitherIterableAccumulatingSupport[E, Coll[x] <: Iterable[x]](using factory: Factory[E, Coll[E]]): Support[[A] =>> Either[Coll[E], A]] =
+      new {
+        override def pure[A](value: A): Either[Coll[E], A] = Right(value)
+        override def map[A, B](fa: Either[Coll[E], A], f: A => B): Either[Coll[E], B] = fa.map(f)
+        override def product[A, B](fa: Either[Coll[E], A], fb: Either[Coll[E], B]): Either[Coll[E], (A, B)] = 
+          (fa, fb) match {
+            case (Right(a), Right(b))           => Right(a -> b)
+            case (Right(_), err @ Left(_))      => err.asInstanceOf[Either[Coll[E], (A, B)]]
+            case (err @ Left(_), Right(_))      => err.asInstanceOf[Either[Coll[E], (A, B)]]
+            case (Left(errorsA), Left(errorsB)) => 
+              val builder = factory.newBuilder
+              val accumulated = builder ++= errorsA ++= errorsB
+              Left(accumulated.result())
           }
       }
   }

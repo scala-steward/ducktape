@@ -81,29 +81,38 @@ object PartialProductTransformations {
   )(using Quotes, Fields.Source) = {
     import quotes.reflect.*
 
-    val transformedFields =
-      fieldsToTransformInto.map { dest =>
-        val source =
-          Fields.source
-            .get(dest.name)
-            .getOrElse(Failure.abort(Failure.NoFieldMapping(dest.name, summon[Type[Source]])))
+    // Ideally .partition would work but if I deconstruct these two into tuples based on the subtype both of their parts are inferred as the union
+    // anyway, hence this thing:
+    val wrappedFields = List.newBuilder[Field.Wrapped[F]]
+    val unwrappedFields = List.newBuilder[Field.Unwrapped]
 
-        source.partialTransformerTo[F, PartialTransformer.Accumulating](dest).asExpr match {
-          case '{ $transformer: PartialTransformer.Accumulating[F, src, dest] } =>
-            val sourceField = sourceValue.accessField(source).asExprOf[src]
-            Field.Wrapped(dest, '{ $transformer.transform($sourceField) })
-        }
+    fieldsToTransformInto.foreach { dest =>
+      val source =
+        Fields.source
+          .get(dest.name)
+          .getOrElse(Failure.abort(Failure.NoFieldMapping(dest.name, summon[Type[Source]])))
+
+      source.partialTransformerTo[F, PartialTransformer.Accumulating](dest).asExpr match {
+        case '{ PartialTransformer.Accumulating.partialFromTotal[F, src, dest](using $total, $support) } =>
+          val sourceField = sourceValue.accessField(source).asExprOf[src]
+          val transformed = LiftTransformation.liftTransformation[src, dest](total, sourceField)
+          unwrappedFields += Field.Unwrapped(dest, transformed)
+        case '{ $transformer: PartialTransformer.Accumulating[F, src, dest] } =>
+          val sourceField = sourceValue.accessField(source).asExprOf[src]
+          wrappedFields += Field.Wrapped(dest, '{ $transformer.transform($sourceField) })
       }
+    }
 
-    Option
-      .when(transformedFields.nonEmpty)(::(transformedFields.head, transformedFields.tail))
+    wrappedFields
+      .mapResult(wrapped => Option.when(wrapped.nonEmpty)(::(wrapped.head, wrapped.tail)))
+      .result()
       .map { transformedFields =>
         zipFields[F, Dest](F, transformedFields) match {
           case '{ $zipped: F[a] } =>
-            '{ $F.map($zipped, value => ${ unzipAndConstruct[Dest](fieldsToTransformInto, 'value) }) }
+            '{ $F.map($zipped, value => ${ unzipAndConstruct[Dest](transformedFields, unwrappedFields.result(), 'value) }) }
         }
       }
-      .getOrElse('{ $F.pure(${ construct[Dest](Nil) }) })
+      .getOrElse('{ $F.pure(${ construct[Dest](unwrappedFields.result()) }) })
   }
 
   private def nestFlatMaps[F[+x]: Type, Dest: Type](
@@ -119,8 +128,7 @@ object PartialProductTransformations {
           value match {
             case '{ $value: F[destField] } =>
               '{
-                $F
-                  .map[`destField`, Dest]($value, a => ${ construct(Field.Unwrapped(field, 'a) :: collectedUnwrappedFields) })
+                $F.map[`destField`, Dest]($value, a => ${ construct(Field.Unwrapped(field, 'a) :: collectedUnwrappedFields) })
               }
           }
 
@@ -147,13 +155,13 @@ object PartialProductTransformations {
   }
 
   private def zipFields[F[+x]: Type, Dest: Type](
-    support: Expr[PartialTransformer.Accumulating.Support[F]],
+    F: Expr[PartialTransformer.Accumulating.Support[F]],
     wrappedFields: NonEmptyList[Field.Wrapped[F]]
   )(using Quotes): Expr[F[Any]] =
     wrappedFields.map(_.value).reduceLeft { (accumulated, current) =>
       (accumulated -> current) match {
         case '{ $accumulated: F[a] } -> '{ $current: F[b] } =>
-          '{ $support.product[`a`, `b`]($accumulated, $current) }
+          '{ $F.product[`a`, `b`]($accumulated, $current) }
       }
     }
 
@@ -163,11 +171,16 @@ object PartialProductTransformations {
     Constructor(TypeRepr.of[Dest]).appliedToArgs(namedArgs).asExprOf[Dest]
   }
 
-  private def unzipAndConstruct[Dest: Type](fields: List[Field], nestedPairs: Expr[Any])(using Quotes) = {
+  private def unzipAndConstruct[Dest: Type](
+    wrappedFields: NonEmptyList[Field.Wrapped[?]],
+    unwrappedFields: List[Field.Unwrapped],
+    nestedPairs: Expr[Any]
+  )(using Quotes) = {
     import quotes.reflect.*
 
-    val (pattern, unwrappedFields) = ZippedProduct.unzip(nestedPairs, fields)
-    Match(nestedPairs.asTerm, CaseDef(pattern, None, construct[Dest](unwrappedFields).asTerm) :: Nil).asExprOf[Dest]
+    val (pattern, unzippedFields) = ZippedProduct.unzip(nestedPairs, wrappedFields)
+    Match(nestedPairs.asTerm, CaseDef(pattern, None, construct[Dest](unzippedFields ::: unwrappedFields).asTerm) :: Nil)
+      .asExprOf[Dest]
   }
 
   private type NonEmptyList[+A] = ::[A]

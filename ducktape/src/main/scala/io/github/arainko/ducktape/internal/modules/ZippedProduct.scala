@@ -24,18 +24,18 @@ object ZippedProduct {
    */
   def unzip(
     nestedPairs: Expr[Any],
-    fields: List[Field] //This should be a NonEmptyList but it's such a pain in the ass to work with it...
+    fields: ::[Field.Wrapped[?]]
   )(using Quotes): (quotes.reflect.Unapply | quotes.reflect.Bind, List[Unwrapped]) = {
     import quotes.reflect.*
 
     def recurse(
       tpe: Type[?],
-      leftoverFields: List[Field]
+      leftoverFields: List[Field.Wrapped[?]]
     )(using Quotes): (quotes.reflect.Unapply | quotes.reflect.Bind, List[Field.Unwrapped]) = {
       import quotes.reflect.*
 
       (tpe -> leftoverFields) match {
-        case ('[Tuple2[first, second]], firstField :: secondField :: Nil) =>
+        case ('[Tuple2[first, second]], Field.Wrapped(firstField, _) :: Field.Wrapped(secondField, _) :: Nil) =>
           val firstTpe = TypeRepr.of[second]
           val secondTpe = TypeRepr.of[first]
           val firstBind = Symbol.newBind(Symbol.spliceOwner, firstField.name, Flags.Local, firstTpe)
@@ -46,12 +46,12 @@ object ZippedProduct {
             Unapply(Tuple2Extractor(secondTpe, firstTpe), Nil, Bind(secondBind, Wildcard()) :: Bind(firstBind, Wildcard()) :: Nil)
           extractor -> fields
 
-        case ('[tpe], field :: Nil) =>
+        case ('[tpe], Field.Wrapped(field, _) :: Nil) =>
           val tpe = TypeRepr.of(using field.tpe)
           val bind = Symbol.newBind(Symbol.spliceOwner, field.name, Flags.Local, tpe)
           Bind(bind, Wildcard()) -> (Field.Unwrapped(field, Ref(bind).asExpr) :: Nil)
 
-        case ('[Tuple2[rest, current]], field :: tail) =>
+        case ('[Tuple2[rest, current]], Field.Wrapped(field, _) :: tail) =>
           val restTpe = TypeRepr.of[rest]
           val currentTpe = TypeRepr.of[current]
           val pairExtractor = Tuple2Extractor(restTpe, currentTpe)
