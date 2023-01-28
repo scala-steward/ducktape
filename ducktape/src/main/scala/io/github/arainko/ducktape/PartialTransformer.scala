@@ -1,6 +1,7 @@
 package io.github.arainko.ducktape
 
 import scala.deriving.Mirror
+import scala.collection.Factory
 
 /*
   DSL:
@@ -19,6 +20,7 @@ object PartialTransformer {
     def transform(value: Source): F[Dest]
   }
 
+  // TODO: Move these out to separate files (both FailFast and Accumulating)
   object FailFast {
     given partialFromTotal[F[+x], Source, Dest](using
       total: Transformer[Source, Dest],
@@ -26,6 +28,43 @@ object PartialTransformer {
     ): FailFast[F, Source, Dest] =
       new {
         def transform(value: Source): F[Dest] = support.pure(total.transform(value))
+      }
+
+    given betweenOption[F[+x], Source, Dest](using
+      transformer: PartialTransformer.FailFast[F, Source, Dest],
+      support: Support[F]
+    ): FailFast[F, Option[Source], Option[Dest]] =
+      new {
+        def transform(value: Option[Source]): F[Option[Dest]] =
+          value.fold(support.pure(None))(source => support.map(transformer.transform(source), Some.apply))
+      }
+
+    given betweenNonOptionOption[F[+x], Source, Dest](using
+      transformer: PartialTransformer.FailFast[F, Source, Dest],
+      support: Support[F]
+    ): FailFast[F, Source, Option[Dest]] =
+      new {
+        def transform(value: Source): F[Option[Dest]] = support.map(transformer.transform(value), Some.apply)
+      }
+
+    // very-very naive impl, can probably lead to stack overflows given big enough collections and a data type that is not stack safe...
+    given betweenCollections[F[+x], Source, Dest, SourceColl[x] <: Iterable[x], DestColl[x] <: Iterable[x]](using
+      transformer: PartialTransformer.FailFast[F, Source, Dest],
+      support: Support[F],
+      factory: Factory[Dest, DestColl[Dest]]
+    ): FailFast[F, SourceColl[Source], DestColl[Dest]] =
+      new {
+        def transform(value: SourceColl[Source]): F[DestColl[Dest]] = {
+          val builder = factory.newBuilder
+          val traversed = value.foldLeft(support.pure(builder)) { (builder, elem) =>
+            support
+              .flatMap(
+                builder,
+                currentBuilder => support.map(transformer.transform(elem), currentBuilder += _)
+              )
+          }
+          support.map(traversed, _.result())
+        }
       }
 
     given derived[F[+x], Source, Dest](using
