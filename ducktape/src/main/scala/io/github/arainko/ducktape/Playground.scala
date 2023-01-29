@@ -57,7 +57,7 @@ object Playground extends App {
 
   // println(
 
-  DebugMacros.code(PartialProductTransformations.transformAccumulating[[A] =>> Either[::[String], A], Person, PersonRefined](person))
+  // DebugMacros.code(PartialProductTransformations.transformAccumulating[[A] =>> Either[::[String], A], Person, PersonRefined](person))
   // )
 
   // println(cos)
