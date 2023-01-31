@@ -12,7 +12,7 @@ trait Transformer[Source, Dest] {
   def transform(from: Source): Dest
 }
 
-object Transformer {
+object Transformer extends LowPrio {
   def apply[Source, Dest](using transformer: Transformer[Source, Dest]): Transformer[Source, Dest] = transformer
 
   def define[Source, Dest]: DefinitionBuilder[Source, Dest] = DefinitionBuilder[Source, Dest]
@@ -111,9 +111,12 @@ object Transformer {
     factory: Factory[Dest, DestCollection[Dest]]
   ): Transformer[SourceCollection[Source], DestCollection[Dest]] = from => from.map(trans.transform).to(factory)
 
-  inline given fromAnyVal[Source <: AnyVal, Dest]: FromAnyVal[Source, Dest] =
-    FromAnyVal.make(DerivedTransformers.fromAnyVal[Source, Dest])
+}
 
-  inline given toAnyVal[Source, Dest <: AnyVal]: ToAnyVal[Source, Dest] =
-    ToAnyVal.make(DerivedTransformers.toAnyVal[Source, Dest])
+trait LowPrio {
+  inline given fromAnyVal[Source <: AnyVal, Dest]: Transformer.FromAnyVal[Source, Dest] =
+    Transformer.FromAnyVal.make(DerivedTransformers.fromAnyVal[Source, Dest])
+
+  inline given toAnyVal[Source, Dest <: AnyVal]: Transformer.ToAnyVal[Source, Dest] =
+    Transformer.ToAnyVal.make(DerivedTransformers.toAnyVal[Source, Dest])
 }

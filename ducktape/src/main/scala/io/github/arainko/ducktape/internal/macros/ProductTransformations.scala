@@ -124,6 +124,8 @@ private[ducktape] object ProductTransformations {
   )(using Quotes): Expr[Dest] = {
     import quotes.reflect.*
 
+    println(TypeRepr.of[Dest].show)
+
     constructor(TypeRepr.of[Dest])
       .appliedTo(sourceValue.asTerm)
       .asExprOf[Dest]
