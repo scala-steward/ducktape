@@ -16,4 +16,12 @@ private[ducktape] object Constructor {
       .select(constructor)
       .appliedToTypes(tpeArgs)
   }
+
+  def construct[A: Type](fields: List[Field.Unwrapped])(using Quotes): Expr[A] = {
+    import quotes.reflect.*
+
+    Constructor(TypeRepr.of[A])
+      .appliedToArgs(fields.map(field => NamedArg(field.underlying.name, field.value.asTerm)))
+      .asExprOf[A]
+  }
 }

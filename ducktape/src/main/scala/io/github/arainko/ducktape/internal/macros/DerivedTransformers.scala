@@ -6,6 +6,7 @@ import io.github.arainko.ducktape.internal.modules.*
 
 import scala.deriving.*
 import scala.quoted.*
+import io.github.arainko.ducktape.PartialTransformer.FailFast
 
 private[ducktape] object DerivedTransformers {
   inline def product[Source, Dest](using
@@ -41,4 +42,17 @@ private[ducktape] object DerivedTransformers {
 
   def deriveFromAnyValTransformerMacro[Source <: AnyVal: Type, Dest: Type](using Quotes): Expr[Transformer[Source, Dest]] =
     '{ source => ${ ProductTransformations.transformFromAnyVal('source) } }
+
+  inline def failFastProduct[F[+x], Source, Dest](using
+    F: PartialTransformer.FailFast.Support[F],
+    Source: Mirror.ProductOf[Source],
+    Dest: Mirror.ProductOf[Dest]
+  ): FailFast[F, Source, Dest] = ${ deriveFailFastProductTransformerMacro[F, Source, Dest]('F, 'Source, 'Dest) }
+
+  def deriveFailFastProductTransformerMacro[F[+x]: Type, Source: Type, Dest: Type](
+    F: Expr[PartialTransformer.FailFast.Support[F]],
+    Source: Expr[Mirror.ProductOf[Source]],
+    Dest: Expr[Mirror.ProductOf[Dest]]
+  )(using Quotes): Expr[PartialTransformer.FailFast[F, Source, Dest]] =
+    '{ source => ${ FailFastProductTransformations.transformFailFast[F, Source, Dest](Source, Dest, F, 'source) } }
 }

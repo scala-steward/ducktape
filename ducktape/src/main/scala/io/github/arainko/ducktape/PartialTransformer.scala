@@ -2,6 +2,17 @@ package io.github.arainko.ducktape
 
 import scala.deriving.Mirror
 import scala.collection.Factory
+import io.github.arainko.ducktape.internal.macros.*
+
+trait LowPrio {
+  given partialFromTotal[F[+x], Source, Dest](using
+    total: Transformer[Source, Dest],
+    F: PartialTransformer.FailFast.Support[F]
+  ): PartialTransformer.FailFast[F, Source, Dest] =
+    new {
+      def transform(value: Source): F[Dest] = F.pure(total.transform(value))
+    }
+}
 
 object PartialTransformer {
   trait FailFast[F[+x], Source, Dest] {
@@ -9,14 +20,8 @@ object PartialTransformer {
   }
 
   // TODO: Move these out to separate files (both FailFast and Accumulating)
-  object FailFast {
-    given partialFromTotal[F[+x], Source, Dest](using
-      total: Transformer[Source, Dest],
-      F: Support[F]
-    ): FailFast[F, Source, Dest] =
-      new {
-        def transform(value: Source): F[Dest] = F.pure(total.transform(value))
-      }
+  object FailFast extends LowPrio {
+    
 
     given betweenOption[F[+x], Source, Dest](using
       transformer: PartialTransformer.FailFast[F, Source, Dest],
@@ -50,11 +55,11 @@ object PartialTransformer {
         }
       }
 
-    given derived[F[+x], Source, Dest](using
+    inline given derived[F[+x], Source, Dest](using
       Source: Mirror.ProductOf[Source],
       Dest: Mirror.ProductOf[Dest],
       F: Support[F]
-    ): FailFast[F, Source, Dest] = ???
+    ): FailFast[F, Source, Dest] = DerivedTransformers.failFastProduct[F, Source, Dest]
 
     trait Support[F[+x]] {
       def pure[A](value: A): F[A]
@@ -144,16 +149,18 @@ object PartialTransformer {
           }
       }
 
-    given eitherIterableAccumulatingSupport[E, Coll[x] <: Iterable[x]](using factory: Factory[E, Coll[E]]): Support[[A] =>> Either[Coll[E], A]] =
+    given eitherIterableAccumulatingSupport[E, Coll[x] <: Iterable[x]](using
+      factory: Factory[E, Coll[E]]
+    ): Support[[A] =>> Either[Coll[E], A]] =
       new {
         override def pure[A](value: A): Either[Coll[E], A] = Right(value)
         override def map[A, B](fa: Either[Coll[E], A], f: A => B): Either[Coll[E], B] = fa.map(f)
-        override def product[A, B](fa: Either[Coll[E], A], fb: Either[Coll[E], B]): Either[Coll[E], (A, B)] = 
+        override def product[A, B](fa: Either[Coll[E], A], fb: Either[Coll[E], B]): Either[Coll[E], (A, B)] =
           (fa, fb) match {
-            case (Right(a), Right(b))           => Right(a -> b)
-            case (Right(_), err @ Left(_))      => err.asInstanceOf[Either[Coll[E], (A, B)]]
-            case (err @ Left(_), Right(_))      => err.asInstanceOf[Either[Coll[E], (A, B)]]
-            case (Left(errorsA), Left(errorsB)) => 
+            case (Right(a), Right(b))      => Right(a -> b)
+            case (Right(_), err @ Left(_)) => err.asInstanceOf[Either[Coll[E], (A, B)]]
+            case (err @ Left(_), Right(_)) => err.asInstanceOf[Either[Coll[E], (A, B)]]
+            case (Left(errorsA), Left(errorsB)) =>
               val builder = factory.newBuilder
               val accumulated = builder ++= errorsA ++= errorsB
               Left(accumulated.result())
