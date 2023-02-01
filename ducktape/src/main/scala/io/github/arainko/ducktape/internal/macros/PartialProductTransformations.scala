@@ -179,8 +179,16 @@ object PartialProductTransformations {
     import quotes.reflect.*
 
     val (pattern, unzippedFields) = ZippedProduct.unzip(nestedPairs, wrappedFields)
-    Match(nestedPairs.asTerm, CaseDef(pattern, None, construct[Dest](unzippedFields ::: unwrappedFields).asTerm) :: Nil)
-      .asExprOf[Dest]
+
+    // workaround for https://github.com/lampepfl/dotty/issues/16784
+    val matchErrorBind = Symbol.newBind(Symbol.spliceOwner, "x", Flags.EmptyFlags, TypeRepr.of[Any])
+    val matchErrorCase =
+      CaseDef(Bind(matchErrorBind, Wildcard()), None, '{ throw new MatchError(${ Ref(matchErrorBind).asExpr }) }.asTerm)
+
+    Match(
+      nestedPairs.asTerm,
+      CaseDef(pattern, None, construct[Dest](unzippedFields ::: unwrappedFields).asTerm) :: matchErrorCase :: Nil
+    ).asExprOf[Dest]
   }
 
   private type NonEmptyList[+A] = ::[A]

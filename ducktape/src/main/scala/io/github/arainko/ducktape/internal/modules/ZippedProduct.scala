@@ -6,68 +6,6 @@ import io.github.arainko.ducktape.internal.macros.*
 import scala.annotation.tailrec
 
 object ZippedProduct {
-
-  val cos = 1 -> 1d -> 1f -> "asd"
-
-  val str = cos._2
-  val float = cos._1._2
-  val double = DebugMacros.structure(cos._1._1._2)
-  val int = cos._1._1._1
-
-  private enum TupleField {
-    case First, Second
-  }
-
-  private def access(using Quotes)(term: quotes.reflect.Term, tupleField: TupleField) = {
-    import quotes.reflect.*
-    val field = tupleField match {
-      case TupleField.First  => "_1"
-      case TupleField.Second => "_2"
-    }
-    Select.unique(term, field)
-  }
-
-  @tailrec
-  private def accessN(using Quotes)(term: quotes.reflect.Term, times: Int): quotes.reflect.Term =
-    times match {
-      case 0    => term
-      case next => accessN(access(term, TupleField.First), next - 1)
-    }
-
-  def unzip2(
-    nestedPairs: Expr[Any],
-    fields: ::[Field.Wrapped[?]]
-  )(using Quotes): List[Field.Unwrapped] = {
-    import quotes.reflect.*
-
-    val fs = fields.reverse.zipWithIndex.reverse
-    val last = fields.size - 1
-
-    def recurse(leftoverFields: List[(Field.Wrapped[?], Int)], acc: List[Field.Unwrapped])(using
-      Quotes
-    ): List[Field.Unwrapped] = {
-      import quotes.reflect.*
-
-      leftoverFields match {
-        case (Field.Wrapped(field, _), idx) :: Nil => ???
-
-        case (f1, idx1) :: (f2, idx2) :: Nil => ???
-        case (f, idx) :: next                => ???
-        case Nil                             => acc
-      }
-    }
-
-    /*
-    val tup = Tuple2[Tuple2[Tuple2[Int, Double], Float], String]
-    String =  ._2
-    Float =   ._1._2
-    Double =  ._1._1._2
-    Int =     ._1._1._1
-     */
-
-    ???
-  }
-
   /**
    * Imagine you have a value of type: Tuple2[Tuple2[Tuple2[Int, Double], Float], String], eg.
    *     val whatever: Tuple2[Tuple2[Tuple2[Int, Double], Float], String] = 1 -> 1d -> 1f -> "4"
