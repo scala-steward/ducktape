@@ -6,8 +6,10 @@ import io.github.arainko.ducktape.internal.modules.*
 
 import scala.deriving.*
 import scala.quoted.*
-import io.github.arainko.ducktape.PartialTransformer.FailFast
+import io.github.arainko.ducktape.FailFast
+import io.github.arainko.ducktape.Accumulating
 
+import io.github.arainko.ducktape.Accumulating
 private[ducktape] object DerivedTransformers {
   inline def product[Source, Dest](using
     Source: Mirror.ProductOf[Source],
@@ -44,15 +46,28 @@ private[ducktape] object DerivedTransformers {
     '{ source => ${ ProductTransformations.transformFromAnyVal('source) } }
 
   inline def failFastProduct[F[+x], Source, Dest](using
-    F: PartialTransformer.FailFast.Support[F],
+    F: FailFast.Support[F],
     Source: Mirror.ProductOf[Source],
     Dest: Mirror.ProductOf[Dest]
   ): FailFast[F, Source, Dest] = ${ deriveFailFastProductTransformerMacro[F, Source, Dest]('F, 'Source, 'Dest) }
 
   def deriveFailFastProductTransformerMacro[F[+x]: Type, Source: Type, Dest: Type](
-    F: Expr[PartialTransformer.FailFast.Support[F]],
+    F: Expr[FailFast.Support[F]],
     Source: Expr[Mirror.ProductOf[Source]],
     Dest: Expr[Mirror.ProductOf[Dest]]
-  )(using Quotes): Expr[PartialTransformer.FailFast[F, Source, Dest]] =
-    '{ source => ${ FailFastProductTransformations.transformFailFast[F, Source, Dest](Source, Dest, F, 'source) } }
+  )(using Quotes): Expr[FailFast[F, Source, Dest]] =
+    '{ source => ${ FailFastProductTransformations.transform[F, Source, Dest](Source, Dest, F, 'source) } }
+
+  inline def accumulatingProduct[F[+x], Source, Dest](using
+    F: Accumulating.Support[F],
+    Source: Mirror.ProductOf[Source],
+    Dest: Mirror.ProductOf[Dest]
+  ): Accumulating[F, Source, Dest] = ${ deriveAccumulatingProductTransformerMacro[F, Source, Dest]('F, 'Source, 'Dest) }
+
+  def deriveAccumulatingProductTransformerMacro[F[+x]: Type, Source: Type, Dest: Type](
+    F: Expr[Accumulating.Support[F]],
+    Source: Expr[Mirror.ProductOf[Source]],
+    Dest: Expr[Mirror.ProductOf[Dest]]
+  )(using Quotes): Expr[Accumulating[F, Source, Dest]] = 
+    '{ source => ${ AccumulatingProductTransformations.transform[F, Source, Dest](Source, Dest, F, 'source) } }
 }

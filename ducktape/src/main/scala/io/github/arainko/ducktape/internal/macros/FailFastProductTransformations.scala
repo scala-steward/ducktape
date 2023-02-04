@@ -1,17 +1,17 @@
 package io.github.arainko.ducktape.internal.macros
 
 import scala.quoted.*
-import io.github.arainko.ducktape.PartialTransformer
+import io.github.arainko.ducktape.FailFast
 import io.github.arainko.ducktape.internal.modules.*
 import scala.deriving.Mirror
 import scala.annotation.tailrec
 import scala.util.chaining.*
 
 object FailFastProductTransformations {
-  def transformFailFast[F[+x]: Type, Source: Type, Dest: Type](
+  def transform[F[+x]: Type, Source: Type, Dest: Type](
     Source: Expr[Mirror.ProductOf[Source]],
     Dest: Expr[Mirror.ProductOf[Dest]],
-    F: Expr[PartialTransformer.FailFast.Support[F]],
+    F: Expr[FailFast.Support[F]],
     sourceValue: Expr[Source]
   )(using Quotes): Expr[F[Dest]] = {
     import quotes.reflect.*
@@ -22,13 +22,13 @@ object FailFastProductTransformations {
     createTransformation[F, Source, Dest](F, sourceValue, Fields.dest.value)
   }
 
-  inline def transform[F[+x], Source, Dest](
+  inline def transformFailFast[F[+x], Source, Dest](
     sourceValue: Source
-  )(using F: PartialTransformer.FailFast.Support[F], inline Source: Mirror.ProductOf[Source], inline Dest: Mirror.ProductOf[Dest]) =
-    ${ transformFailFast[F, Source, Dest]('Source, 'Dest, 'F, 'sourceValue) }
+  )(using F: FailFast.Support[F], inline Source: Mirror.ProductOf[Source], inline Dest: Mirror.ProductOf[Dest]) =
+    ${ transform[F, Source, Dest]('Source, 'Dest, 'F, 'sourceValue) }
 
   private def createTransformation[F[+x]: Type, Source: Type, Dest: Type](
-    F: Expr[PartialTransformer.FailFast.Support[F]],
+    F: Expr[FailFast.Support[F]],
     sourceValue: Expr[Source],
     fieldsToTransformInto: List[Field]
   )(using Quotes, Fields.Source) = {
@@ -41,12 +41,12 @@ object FailFastProductTransformations {
             .get(dest.name)
             .getOrElse(Failure.abort(Failure.NoFieldMapping(dest.name, summon[Type[Source]])))
 
-        source.partialTransformerTo[F, PartialTransformer.FailFast](dest).asExpr match {
-          case '{ PartialTransformer.FailFast.partialFromTotal[F, src, dest](using $total, $support) } =>
+        source.partialTransformerTo[F, FailFast](dest).asExpr match {
+          case '{ FailFast.partialFromTotal[F, src, dest](using $total, $support) } =>
             val sourceField = sourceValue.accessField(source).asExprOf[src]
             val lifted = LiftTransformation.liftTransformation[src, dest](total, sourceField)
             Field.Unwrapped(dest, lifted)
-          case '{ $transformer: PartialTransformer.FailFast[F, src, dest] } =>
+          case '{ $transformer: FailFast[F, src, dest] } =>
             val sourceField = sourceValue.accessField(source).asExprOf[src]
             Field.Wrapped(dest, '{ $transformer.transform($sourceField) })
         }
@@ -56,7 +56,7 @@ object FailFastProductTransformations {
   }
 
   private def nestFlatMapsAndConstruct[F[+x]: Type, Dest: Type](
-    F: Expr[PartialTransformer.FailFast.Support[F]],
+    F: Expr[FailFast.Support[F]],
     fields: List[Field.Wrapped[F] | Field.Unwrapped]
   )(using Quotes): Expr[F[Dest]] = {
     def recurse(

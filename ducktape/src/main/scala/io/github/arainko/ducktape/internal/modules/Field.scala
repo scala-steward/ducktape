@@ -1,10 +1,10 @@
 package io.github.arainko.ducktape.internal.modules
 
-import io.github.arainko.ducktape.Transformer
+import io.github.arainko.ducktape.{ FailFast, Transformer, Accumulating }
 
 import scala.quoted.*
-import io.github.arainko.ducktape.PartialTransformer
 
+import io.github.arainko.ducktape.Accumulating
 private[ducktape] final class Field(val name: String, val tpe: Type[?]) {
   def transformerTo(that: Field)(using Quotes): Expr[Transformer[?, ?]] = {
     import quotes.reflect.*
@@ -21,7 +21,7 @@ private[ducktape] final class Field(val name: String, val tpe: Type[?]) {
   //This untyped due to not being able to reduce a HKT with wildcards
   def partialTransformerTo[
     F[+x]: Type,
-    PartialTransformer[f[+x], a, b] <: PartialTransformer.FailFast[f, a, b] | PartialTransformer.Accumulating[f, a, b]: Type
+    PartialTransformer[f[+x], a, b] <: FailFast[f, a, b] | Accumulating[f, a, b]: Type
   ](that: Field)(using Quotes): quotes.reflect.Term = {
     import quotes.reflect.*
 

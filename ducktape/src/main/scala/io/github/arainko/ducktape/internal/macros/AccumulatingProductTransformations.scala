@@ -1,17 +1,18 @@
 package io.github.arainko.ducktape.internal.macros
 
 import scala.quoted.*
-import io.github.arainko.ducktape.PartialTransformer
 import io.github.arainko.ducktape.internal.modules.*
 import scala.deriving.Mirror
 import scala.annotation.tailrec
 import scala.util.chaining.*
 
+import io.github.arainko.ducktape.Accumulating
+
 object AccumulatingProductTransformations {
-  def transformAcc[F[+x]: Type, Source: Type, Dest: Type](
+  def transform[F[+x]: Type, Source: Type, Dest: Type](
     Source: Expr[Mirror.ProductOf[Source]],
     Dest: Expr[Mirror.ProductOf[Dest]],
-    F: Expr[PartialTransformer.Accumulating.Support[F]],
+    F: Expr[Accumulating.Support[F]],
     sourceValue: Expr[Source]
   )(using Quotes): Expr[F[Dest]] = {
     import quotes.reflect.*
@@ -24,11 +25,11 @@ object AccumulatingProductTransformations {
 
   inline def transformAccumulating[F[+x], Source, Dest](
     sourceValue: Source
-  )(using F: PartialTransformer.Accumulating.Support[F], Source: Mirror.ProductOf[Source], Dest: Mirror.ProductOf[Dest]) =
-    ${ transformAcc[F, Source, Dest]('Source, 'Dest, 'F, 'sourceValue) }
+  )(using F: Accumulating.Support[F], Source: Mirror.ProductOf[Source], Dest: Mirror.ProductOf[Dest]) =
+    ${ transform[F, Source, Dest]('Source, 'Dest, 'F, 'sourceValue) }
 
   private def accumulatingFieldTransformations[F[+x]: Type, Source: Type, Dest: Type](
-    F: Expr[PartialTransformer.Accumulating.Support[F]],
+    F: Expr[Accumulating.Support[F]],
     sourceValue: Expr[Source],
     fieldsToTransformInto: List[Field]
   )(using Quotes, Fields.Source) = {
@@ -45,12 +46,12 @@ object AccumulatingProductTransformations {
           .get(dest.name)
           .getOrElse(Failure.abort(Failure.NoFieldMapping(dest.name, summon[Type[Source]])))
 
-      source.partialTransformerTo[F, PartialTransformer.Accumulating](dest).asExpr match {
-        case '{ PartialTransformer.Accumulating.partialFromTotal[F, src, dest](using $total, $support) } =>
+      source.partialTransformerTo[F, Accumulating](dest).asExpr match {
+        case '{ Accumulating.partialFromTotal[F, src, dest](using $total, $support) } =>
           val sourceField = sourceValue.accessField(source).asExprOf[src]
           val transformed = LiftTransformation.liftTransformation[src, dest](total, sourceField)
           unwrappedFields += Field.Unwrapped(dest, transformed)
-        case '{ $transformer: PartialTransformer.Accumulating[F, src, dest] } =>
+        case '{ $transformer: Accumulating[F, src, dest] } =>
           val sourceField = sourceValue.accessField(source).asExprOf[src]
           wrappedFields += Field.Wrapped(dest, '{ $transformer.transform($sourceField) })
       }
@@ -69,7 +70,7 @@ object AccumulatingProductTransformations {
   }
 
   private def zipFields[F[+x]: Type, Dest: Type](
-    F: Expr[PartialTransformer.Accumulating.Support[F]],
+    F: Expr[Accumulating.Support[F]],
     wrappedFields: NonEmptyList[Field.Wrapped[F]]
   )(using Quotes): Expr[F[Any]] =
     wrappedFields.map(_.value).reduceLeft { (accumulated, current) =>
