@@ -60,7 +60,7 @@ object Accumulating extends DerivedAccumulatingTransformers {
 
   object Support {
     given eitherConsAccumulatingSupport[E]: Support[[A] =>> Either[::[E], A]] =
-      new {
+      new Support[[A] =>> Either[::[E], A]] {
         def pure[A](value: A): Either[::[E], A] = Right(value)
         def map[A, B](fa: Either[::[E], A], f: A => B): Either[::[E], B] = fa.map(f)
         def product[A, B](fa: Either[::[E], A], fb: Either[::[E], B]): Either[::[E], (A, B)] =
@@ -71,6 +71,10 @@ object Accumulating extends DerivedAccumulatingTransformers {
             case (Left(errorsA), Left(errorsB)) => Left((errorsA ::: errorsB).asInstanceOf[::[E]])
           }
       }
+
+    //TODO: Figure out why nested derivations can't figure out this intance by itself, it works for the 'toplevel' derivation but
+    // seems to be thrown off when trying to unify the 'E' inside eitherConsAccumulatingSupport?
+    given eitherStr: Support[[A] =>> Either[::[String], A]] = eitherConsAccumulatingSupport[String]
 
     given eitherIterableAccumulatingSupport[E, Coll[x] <: Iterable[x]](using
       factory: Factory[E, Coll[E]]
