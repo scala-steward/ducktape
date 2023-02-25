@@ -4,7 +4,6 @@ import io.github.arainko.ducktape.{ FailFast, Transformer, Accumulating }
 
 import scala.quoted.*
 
-import io.github.arainko.ducktape.Accumulating
 private[ducktape] final class Field(val name: String, val tpe: Type[?]) {
   def transformerTo(that: Field)(using Quotes): Expr[Transformer[?, ?]] = {
     import quotes.reflect.*
@@ -13,7 +12,7 @@ private[ducktape] final class Field(val name: String, val tpe: Type[?]) {
       case '[src] -> '[dest] =>
         Implicits.search(TypeRepr.of[Transformer[src, dest]]) match {
           case success: ImplicitSearchSuccess => success.tree.asExprOf[Transformer[src, dest]]
-          case err: ImplicitSearchFailure     => report.errorAndAbort(err.explanation)
+          case err: ImplicitSearchFailure     => Failure.abort(Failure.TransformerNotFound(this, that, err.explanation))
         }
     }
   }

@@ -10,10 +10,13 @@ import scala.deriving.Mirror
 extension [Source](value: Source) {
   def into[Dest]: AppliedBuilder[Source, Dest] = AppliedBuilder(value)
 
-  inline def to[Dest](using inline transformer: Transformer[Source, Dest]): Dest =
-    Transformations.liftFromTransformer(value)
+  // TODO: Introduce in ducktape 0.2 as a replacement for `.to`, this will break binary compat
+  // inline def transformInto[Dest](using inline transformer: Transformer[Source, Dest]) =
+  //   ${ LiftTransformation.liftTransformation('transformer, 'value) }
 
-  transparent inline def intoVia[Func](inline function: Func)(using Mirror.ProductOf[Source], FunctionMirror[Func]): Any =
+  def to[Dest](using Transformer[Source, Dest]): Dest = Transformer[Source, Dest].transform(value)
+
+  transparent inline def intoVia[Func](inline function: Func)(using Mirror.ProductOf[Source], FunctionMirror[Func]) =
     AppliedViaBuilder.create(value, function)
 
   inline def via[Func](inline function: Func)(using
