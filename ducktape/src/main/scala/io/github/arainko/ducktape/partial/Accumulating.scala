@@ -13,7 +13,7 @@ trait Accumulating[F[+x], Source, Dest] {
 
 object Accumulating extends LowPriorityAccumulatingInstances {
 
-  def apply[F[+x], Source, Dest](using accumulating: Accumulating[F, Source, Dest]): Accumulating[F, Source, Dest] = accumulating
+  def apply[F[+x], Source, Dest](using transformer: Accumulating[F, Source, Dest]): Accumulating[F, Source, Dest] = transformer
 
   // TODO: Add builder
   def define = ???

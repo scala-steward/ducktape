@@ -23,11 +23,6 @@ object FailFastProductTransformations {
     createTransformation[F, Source, Dest](F, sourceValue, Fields.dest.value)
   }
 
-  inline def transformFailFast[F[+x], Source, Dest](
-    sourceValue: Source
-  )(using F: FailFast.Support[F], inline Source: Mirror.ProductOf[Source], inline Dest: Mirror.ProductOf[Dest]) =
-    ${ transform[F, Source, Dest]('Source, 'Dest, 'F, 'sourceValue) }
-
   private def createTransformation[F[+x]: Type, Source: Type, Dest: Type](
     F: Expr[FailFast.Support[F]],
     sourceValue: Expr[Source],

@@ -3,8 +3,10 @@ package io.github.arainko.ducktape
 import io.github.arainko.ducktape.internal.*
 import io.github.arainko.ducktape.internal.macros.*
 import io.github.arainko.ducktape.partial.{ Accumulating, FailFast }
+import io.github.arainko.ducktape.newtypes.Age
+import io.github.arainko.ducktape.newtypes.Name
+import scala.deriving.Mirror
 
-import scala.runtime.TupleMirror
 final case class Person(name: String, age: Int, additional: Int, int: Int, p: Person2)
 
 final case class Person2(name: String, age: Int, additional: Int, int: Int)
@@ -31,9 +33,24 @@ object newtypes {
 }
 
 object Playground extends App {
-  // val person = Person("name", 1, 1, 1, Person2("name", 1, 1, 1))
+  val person = Person("name", 1, 1, 1, Person2("name", 1, 1, 1))
 
-  DebugMacros.code(summon[Accumulating[[A] =>> Either[::[String], A], Person, PersonRefined]])
-  DebugMacros.code(summon[FailFast[[A] =>> Option[A], Person, PersonRefined]])
+
+  // PersonRefined.apply()
+
+  // private given cos: FunctionMirror[(Name, Int, Option[Age], Int, Person3) => PersonRefined]{type Return >: PersonRefined <: PersonRefined} = summon[FunctionMirror[(Name, Int, Option[Age], Int, Person3) => PersonRefined]]
+
+  // Transformations.via(person, PersonRefined.apply)
+
+  // given FunctionMirror.Aux[(Name, Int, Option[Age], Int, Person3) => PersonRefined, PersonRefined] = ???
+
+  val cos: Either[::[String], PersonRefined] = 
+    DebugMacros.code(Transformations.AccumulatingViaPartiallyApplied[[A] =>> Either[::[String], A]].apply(PersonRefined.apply)(person))
+
+  // val cos: Either[::[String], PersonRefined] =
+  // Transformations.accumulatingVia[[A] =>> Either[::[String], A], Person, PersonRefined, (Name, Int, Option[Age], Int, Person3) => PersonRefined](person, PersonRefined.apply)
+
+  // DebugMacros.code(summon[Accumulating[[A] =>> Either[::[String], A], Person, PersonRefined]])
+  // DebugMacros.code(summon[FailFast[[A] =>> Option[A], Person, PersonRefined]])
   // DebugMacros.code(Accumulating.derived[[A] =>> Either[::[String], A], Person, PersonRefined])
 }

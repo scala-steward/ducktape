@@ -12,7 +12,7 @@ trait FailFast[F[+x], Source, Dest] {
 
 object FailFast extends LowPriorityFailFastInstances {
 
-  def apply[F[+x], Source, Dest](using failFast: FailFast[F, Source, Dest]): FailFast[F, Source, Dest] = failFast
+  def apply[F[+x], Source, Dest](using transformer: FailFast[F, Source, Dest]): FailFast[F, Source, Dest] = transformer
 
   // TODO: Add builder
   def define = ???
