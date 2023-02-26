@@ -14,17 +14,17 @@ private[ducktape] object Transformations {
     Func: FunctionMirror.Aux[Func, Dest]
   ): Dest = ${ ProductTransformations.via('source, 'function, 'Func, 'Source) }
 
-  inline def accumulatingVia[F[+x], Source, Dest, Func](inline function: Func)(using
-    Func: FunctionMirror.Aux[Func, Dest]
-  )(source: Source)(using Source: Mirror.ProductOf[Source], F: Transformer.Accumulating.Support[F]): F[Dest] = ${
-    AccumulatingProductTransformations.via('source, 'function, 'Func, 'Source, 'F)
-  }
+  // inline def accumulatingVia[F[+x], Source, Dest, Func](inline function: Func)(using
+  //   Func: FunctionMirror.Aux[Func, Dest]
+  // )(source: Source)(using Source: Mirror.ProductOf[Source], F: Transformer.Accumulating.Support[F]): F[Dest] = ${
+  //   AccumulatingProductTransformations.via('source, 'function, 'Func, 'Source, 'F)
+  // }
 
-  final class AccumulatingViaPartiallyApplied[F[+x]] {
-    inline def apply[Source, Dest, Func](inline function: Func)(using
-      Func: FunctionMirror.Aux[Func, Dest]
-    )(source: Source)(using Source: Mirror.ProductOf[Source], F: Transformer.Accumulating.Support[F]): F[Dest] = ${
-      AccumulatingProductTransformations.via('source, 'function, 'Func, 'Source, 'F)
+  final class AccumulatingViaPartiallyApplied[F[+x], Source](source: Source) {
+    inline def apply[Func](inline function: Func)(using
+      Func: FunctionMirror[Func]
+    )(using Source: Mirror.ProductOf[Source], F: Transformer.Accumulating.Support[F]): F[Func.Return] = ${
+      AccumulatingProductTransformations.via[F, Source, Func.Return, Func]('source, 'function, 'Source, 'F)
     }
   }
 

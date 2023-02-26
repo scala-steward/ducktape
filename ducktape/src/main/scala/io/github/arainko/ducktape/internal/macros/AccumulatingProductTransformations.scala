@@ -27,7 +27,6 @@ object AccumulatingProductTransformations {
   def via[F[+x]: Type, Source: Type, Dest: Type, Func](
     sourceValue: Expr[Source],
     function: Expr[Func],
-    Func: Expr[FunctionMirror.Aux[Func, Dest]],
     Source: Expr[Mirror.ProductOf[Source]],
     F: Expr[Accumulating.Support[F]]
   )(using Quotes): Expr[F[Dest]] = {

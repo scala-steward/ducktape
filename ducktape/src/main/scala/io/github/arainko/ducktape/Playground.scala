@@ -44,8 +44,10 @@ object Playground extends App {
 
   // given FunctionMirror.Aux[(Name, Int, Option[Age], Int, Person3) => PersonRefined, PersonRefined] = ???
 
-  val cos: Either[::[String], PersonRefined] = 
-    DebugMacros.code(Transformations.AccumulatingViaPartiallyApplied[[A] =>> Either[::[String], A]].apply(PersonRefined.apply)(person))
+  type EitherCons[A] = Either[::[String], A]
+
+  val cos = 
+    DebugMacros.code(person.accumulatingVia[EitherCons](PersonRefined.apply))
 
   // val cos: Either[::[String], PersonRefined] =
   // Transformations.accumulatingVia[[A] =>> Either[::[String], A], Person, PersonRefined, (Name, Int, Option[Age], Int, Person3) => PersonRefined](person, PersonRefined.apply)

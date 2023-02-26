@@ -6,6 +6,7 @@ import io.github.arainko.ducktape.internal.macros.*
 import io.github.arainko.ducktape.internal.modules.*
 
 import scala.deriving.Mirror
+import io.github.arainko.ducktape.internal.macros.Transformations.AccumulatingViaPartiallyApplied
 
 extension [Source](value: Source) {
   def into[Dest]: AppliedBuilder[Source, Dest] = AppliedBuilder(value)
@@ -35,5 +36,6 @@ extension [Source](value: Source) {
 
   def failFastVia[Func] = ???
 
-  def accumulatingVia[Func] = ???
+  def accumulatingVia[F[+x]]: Transformations.AccumulatingViaPartiallyApplied[F, Source] =
+    Transformations.AccumulatingViaPartiallyApplied(value)
 }
