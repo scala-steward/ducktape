@@ -1,11 +1,13 @@
 package io.github.arainko.ducktape.internal.modules
 
-import scala.quoted.*
-import io.github.arainko.ducktape.internal.modules.Field.Unwrapped
 import io.github.arainko.ducktape.internal.macros.*
+import io.github.arainko.ducktape.internal.modules.Field.Unwrapped
+
 import scala.annotation.tailrec
+import scala.quoted.*
 
 object ZippedProduct {
+
   /**
    * Imagine you have a value of type: Tuple2[Tuple2[Tuple2[Int, Double], Float], String], eg.
    *     val whatever: Tuple2[Tuple2[Tuple2[Int, Double], Float], String] = 1 -> 1d -> 1f -> "4"

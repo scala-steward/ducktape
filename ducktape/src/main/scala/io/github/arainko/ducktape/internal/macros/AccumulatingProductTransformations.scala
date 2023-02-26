@@ -1,12 +1,12 @@
 package io.github.arainko.ducktape.internal.macros
 
-import scala.quoted.*
 import io.github.arainko.ducktape.internal.modules.*
-import scala.deriving.Mirror
-import scala.annotation.tailrec
-import scala.util.chaining.*
+import io.github.arainko.ducktape.partial.Accumulating
 
-import io.github.arainko.ducktape.Accumulating
+import scala.annotation.tailrec
+import scala.deriving.Mirror
+import scala.quoted.*
+import scala.util.chaining.*
 
 object AccumulatingProductTransformations {
   def transform[F[+x]: Type, Source: Type, Dest: Type](
@@ -87,17 +87,26 @@ object AccumulatingProductTransformations {
   )(using Quotes) = {
     import quotes.reflect.*
 
-    val (pattern, unzippedFields) = ZippedProduct.unzip(nestedPairs, wrappedFields)
+    ZippedProduct.unzip(nestedPairs, wrappedFields) match {
+      //
+      case (bind: Bind, unzippedFields) =>
+        Match(
+          nestedPairs.asTerm,
+          CaseDef(bind, None, Constructor.construct[Dest](unzippedFields ::: unwrappedFields).asTerm) :: Nil
+        ).asExprOf[Dest]
 
-    // workaround for https://github.com/lampepfl/dotty/issues/16784
-    val matchErrorBind = Symbol.newBind(Symbol.spliceOwner, "x", Flags.EmptyFlags, TypeRepr.of[Any])
-    val matchErrorCase =
-      CaseDef(Bind(matchErrorBind, Wildcard()), None, '{ throw new MatchError(${ Ref(matchErrorBind).asExpr }) }.asTerm)
+      case (pattern: Unapply, unzippedFields) =>
+        // workaround for https://github.com/lampepfl/dotty/issues/16784
+        val matchErrorBind = Symbol.newBind(Symbol.spliceOwner, "x", Flags.EmptyFlags, TypeRepr.of[Any])
+        val matchErrorCase =
+          CaseDef(Bind(matchErrorBind, Wildcard()), None, '{ throw new MatchError(${ Ref(matchErrorBind).asExpr }) }.asTerm)
 
-    Match(
-      nestedPairs.asTerm,
-      CaseDef(pattern, None, Constructor.construct[Dest](unzippedFields ::: unwrappedFields).asTerm) :: matchErrorCase :: Nil
-    ).asExprOf[Dest]
+        Match(
+          nestedPairs.asTerm,
+          CaseDef(pattern, None, Constructor.construct[Dest](unzippedFields ::: unwrappedFields).asTerm) :: matchErrorCase :: Nil
+        ).asExprOf[Dest]
+    }
+
   }
 
   private type NonEmptyList[+A] = ::[A]

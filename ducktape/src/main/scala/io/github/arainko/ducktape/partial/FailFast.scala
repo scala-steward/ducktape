@@ -1,24 +1,32 @@
-package io.github.arainko.ducktape
+package io.github.arainko.ducktape.partial
 
-import io.github.arainko.ducktape.derivation.DerivedFailFastTransformers
+import io.github.arainko.ducktape.Transformer
+import io.github.arainko.ducktape.internal.macros.DerivedTransformers
+
 import scala.collection.Factory
+import scala.deriving.Mirror
 
 trait FailFast[F[+x], Source, Dest] {
   def transform(value: Source): F[Dest]
 }
 
-// TODO: Move these out to separate files (both FailFast and Accumulating)
-object FailFast extends DerivedFailFastTransformers {
+object FailFast extends LowPriorityFailFastInstances {
 
-  given partialFromTotal[F[+x], Source, Dest](using
-    total: Transformer[Source, Dest],
+  def apply[F[+x], Source, Dest](using failFast: FailFast[F, Source, Dest]): FailFast[F, Source, Dest] = failFast
+
+  // TODO: Add builder
+  def define = ???
+
+  // TODO: Add method-expanding builder
+  def defineVia = ???
+
+  inline given derived[F[+x], Source, Dest](using
+    Source: Mirror.ProductOf[Source],
+    Dest: Mirror.ProductOf[Dest],
     F: FailFast.Support[F]
-  ): FailFast[F, Source, Dest] =
-    new {
-      def transform(value: Source): F[Dest] = F.pure(total.transform(value))
-    }
+  ): FailFast[F, Source, Dest] = DerivedTransformers.failFastProduct[F, Source, Dest]
 
-  given betweenOption[F[+x], Source, Dest](using
+  given betweenOptions[F[+x], Source, Dest](using
     transformer: FailFast[F, Source, Dest],
     F: Support[F]
   ): FailFast[F, Option[Source], Option[Dest]] =
@@ -71,4 +79,14 @@ object FailFast extends DerivedFailFastTransformers {
         def flatMap[A, B](fa: Either[E, A], f: A => Either[E, B]): Either[E, B] = fa.flatMap(f)
       }
   }
+}
+
+sealed trait LowPriorityFailFastInstances {
+  given partialFromTotal[F[+x], Source, Dest](using
+    total: Transformer[Source, Dest],
+    F: FailFast.Support[F]
+  ): FailFast[F, Source, Dest] =
+    new {
+      def transform(value: Source): F[Dest] = F.pure(total.transform(value))
+    }
 }

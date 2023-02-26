@@ -1,10 +1,11 @@
 package io.github.arainko.ducktape.internal.macros
 
-import scala.quoted.*
-import io.github.arainko.ducktape.FailFast
 import io.github.arainko.ducktape.internal.modules.*
+import io.github.arainko.ducktape.partial.FailFast
+
+import scala.annotation.*
 import scala.deriving.Mirror
-import scala.annotation.tailrec
+import scala.quoted.*
 import scala.util.chaining.*
 
 object FailFastProductTransformations {
@@ -68,7 +69,16 @@ object FailFastProductTransformations {
           value match {
             case '{ $value: F[destField] } =>
               '{
-                $F.map[`destField`, Dest]($value, a => ${ Constructor.construct[Dest](Field.Unwrapped(field, 'a) :: collectedUnwrappedFields) })
+                $F.map[`destField`, Dest](
+                  $value,
+                  ${
+                    generateLambda[[A] =>> A, destField, Dest](
+                      field,
+                      unwrappedValue =>
+                        Constructor.construct[Dest](Field.Unwrapped(field, unwrappedValue) :: collectedUnwrappedFields)
+                    )
+                  }
+                )
               }
           }
 
@@ -78,7 +88,12 @@ object FailFastProductTransformations {
               '{
                 $F.flatMap[`destField`, Dest](
                   $value,
-                  a => ${ recurse(next, Field.Unwrapped(field, 'a) :: collectedUnwrappedFields) }
+                  ${
+                    generateLambda[F, destField, Dest](
+                      field,
+                      unwrappedValue => recurse(next, Field.Unwrapped(field, unwrappedValue) :: collectedUnwrappedFields)
+                    )
+                  }
                 )
               }
           }
@@ -92,5 +107,19 @@ object FailFastProductTransformations {
       }
 
     recurse(fields, Nil)
+  }
+
+  // this fixes a weird compiler crash where if I use the same name for each of the lambda args the compiler is not able to find a proxy for one of the invocations (?)
+  // this probably warrants a crash report?
+  @nowarn // todo: use @unchecked?
+  private def generateLambda[F[+x]: Type, A: Type, B: Type](field: Field, f: Expr[A] => Expr[F[B]])(using Quotes) = {
+    import quotes.reflect.*
+
+    val mtpe = MethodType(List(field.name))(_ => List(TypeRepr.of[A]), _ => TypeRepr.of[F[B]])
+    Lambda(
+      Symbol.spliceOwner,
+      mtpe,
+      { case (methSym, (arg1: Term) :: Nil) => f(arg1.asExprOf[A]).asTerm.changeOwner(methSym) }
+    ).asExprOf[A => F[B]]
   }
 }

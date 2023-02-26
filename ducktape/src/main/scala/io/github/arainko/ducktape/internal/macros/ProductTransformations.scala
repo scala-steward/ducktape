@@ -186,7 +186,8 @@ private[ducktape] object ProductTransformations {
       case '{
             type a
             $transformer: Transformer.Identity[`a`, `a`]
-          } => sourceValue.accessField(source)
+          } =>
+        sourceValue.accessField(source)
       case '{ $transformer: Transformer[source, dest] } =>
         val field = sourceValue.accessField(source).asExprOf[source]
         LiftTransformation.liftTransformation(transformer, field).asTerm

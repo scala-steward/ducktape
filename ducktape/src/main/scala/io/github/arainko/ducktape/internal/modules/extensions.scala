@@ -9,7 +9,7 @@ extension (tpe: Type[?]) {
     TypeRepr.of(using tpe).show(using Printer.TypeReprCode)
   }
 
-  private[ducktape] def repr(using Quotes): quotes.reflect.TypeRepr = 
+  private[ducktape] def repr(using Quotes): quotes.reflect.TypeRepr =
     quotes.reflect.TypeRepr.of(using tpe)
 }
 

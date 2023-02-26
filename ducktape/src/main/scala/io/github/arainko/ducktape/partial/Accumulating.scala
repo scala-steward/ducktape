@@ -1,26 +1,33 @@
-package io.github.arainko.ducktape
+package io.github.arainko.ducktape.partial
 
-import scala.deriving.Mirror
-import scala.collection.Factory
+import io.github.arainko.ducktape.Transformer
 import io.github.arainko.ducktape.internal.macros.*
-import io.github.arainko.ducktape.derivation.DerivedFailFastTransformers
-import io.github.arainko.ducktape.derivation.DerivedAccumulatingTransformers
+import io.github.arainko.ducktape.partial.Accumulating.Support
+
+import scala.collection.Factory
+import scala.deriving.Mirror
 
 trait Accumulating[F[+x], Source, Dest] {
   def transform(value: Source): F[Dest]
 }
 
-object Accumulating extends DerivedAccumulatingTransformers {
+object Accumulating extends LowPriorityAccumulatingInstances {
 
-  given partialFromTotal[F[+x], Source, Dest](using
-    total: Transformer[Source, Dest],
-    F: Support[F]
-  ): Accumulating[F, Source, Dest] =
-    new {
-      def transform(value: Source): F[Dest] = F.pure(total.transform(value))
-    }
+  def apply[F[+x], Source, Dest](using accumulating: Accumulating[F, Source, Dest]): Accumulating[F, Source, Dest] = accumulating
 
-  given betweenOption[F[+x], Source, Dest](using
+  // TODO: Add builder
+  def define = ???
+
+  // TODO: Add method-expanding builder
+  def defineVia = ???
+
+  inline given derived[F[+x], Source, Dest](using
+    Source: Mirror.ProductOf[Source],
+    Dest: Mirror.ProductOf[Dest],
+    F: Accumulating.Support[F]
+  ): Accumulating[F, Source, Dest] = DerivedTransformers.accumulatingProduct[F, Source, Dest]
+
+  given betweenOptions[F[+x], Source, Dest](using
     transformer: Accumulating[F, Source, Dest],
     F: Support[F]
   ): Accumulating[F, Option[Source], Option[Dest]] =
@@ -72,10 +79,6 @@ object Accumulating extends DerivedAccumulatingTransformers {
           }
       }
 
-    //TODO: Figure out why nested derivations can't figure out this intance by itself, it works for the 'toplevel' derivation but
-    // seems to be thrown off when trying to unify the 'E' inside eitherConsAccumulatingSupport?
-    given eitherStr: Support[[A] =>> Either[::[String], A]] = eitherConsAccumulatingSupport[String]
-
     given eitherIterableAccumulatingSupport[E, Coll[x] <: Iterable[x]](using
       factory: Factory[E, Coll[E]]
     ): Support[[A] =>> Either[Coll[E], A]] =
@@ -94,4 +97,14 @@ object Accumulating extends DerivedAccumulatingTransformers {
           }
       }
   }
+}
+
+sealed trait LowPriorityAccumulatingInstances {
+  given partialFromTotal[F[+x], Source, Dest](using
+    total: Transformer[Source, Dest],
+    F: Support[F]
+  ): Accumulating[F, Source, Dest] =
+    new {
+      def transform(value: Source): F[Dest] = F.pure(total.transform(value))
+    }
 }
