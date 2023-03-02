@@ -36,6 +36,6 @@ extension [Source](value: Source) {
 
   def failFastVia[Func] = ???
 
-  def accumulatingVia[F[+x]]: Transformations.AccumulatingViaPartiallyApplied[F, Source] =
-    Transformations.AccumulatingViaPartiallyApplied(value)
+  def accumulatingVia[F[+x]]: Transformations.PartiallyApplied[F, Source] =
+    Transformations.PartiallyApplied[F, Source](value)
 }

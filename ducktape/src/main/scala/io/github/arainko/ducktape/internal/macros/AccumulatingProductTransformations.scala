@@ -21,7 +21,7 @@ object AccumulatingProductTransformations {
     given Fields.Source = Fields.Source.fromMirror(Source)
     given Fields.Dest = Fields.Dest.fromMirror(Dest)
 
-    accumulatingFieldTransformations[F, Source, Dest](F, sourceValue, Fields.dest.value)(Constructor.construct[Dest])
+    createTransformation[F, Source, Dest](F, sourceValue, Fields.dest.value)(Constructor.construct[Dest])
   }
 
   def via[F[+x]: Type, Source: Type, Dest: Type, Func](
@@ -37,7 +37,7 @@ object AccumulatingProductTransformations {
         given Fields.Source = Fields.Source.fromMirror(Source)
         given Fields.Dest = Fields.Dest.fromValDefs(vals)
 
-        accumulatingFieldTransformations[F, Source, Dest](F, sourceValue, Fields.dest.value) { unwrappedFields =>
+        createTransformation[F, Source, Dest](F, sourceValue, Fields.dest.value) { unwrappedFields =>
           val rearrangedFields = rearrangeFieldsToDestOrder(unwrappedFields).map(_.value.asTerm)
           Select.unique(func, "apply").appliedToArgs(rearrangedFields).asExprOf[Dest]
         }
@@ -45,7 +45,7 @@ object AccumulatingProductTransformations {
     }
   }
 
-  private def accumulatingFieldTransformations[F[+x]: Type, Source: Type, Dest: Type](
+  private def createTransformation[F[+x]: Type, Source: Type, Dest: Type](
     F: Expr[Accumulating.Support[F]],
     sourceValue: Expr[Source],
     fieldsToTransformInto: List[Field]

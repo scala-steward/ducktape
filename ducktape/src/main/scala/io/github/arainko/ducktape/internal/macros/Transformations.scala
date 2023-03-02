@@ -20,11 +20,34 @@ private[ducktape] object Transformations {
   //   AccumulatingProductTransformations.via('source, 'function, 'Func, 'Source, 'F)
   // }
 
+  // alternative to AccumulatingViaPartiallyApplied
+  opaque type PartiallyApplied[F[+x], Source] = Source
+
+  object PartiallyApplied {
+    def apply[F[+x], Source](src: Source): PartiallyApplied[F, Source] = src
+
+    extension [F[+x], Source](self: PartiallyApplied[F, Source]) {
+      inline def apply[Func](inline function: Func)(using
+        Func: FunctionMirror[Func]
+      )(using Source: Mirror.ProductOf[Source], F: Transformer.Accumulating.Support[F]): F[Func.Return] = ${
+        AccumulatingProductTransformations.via[F, Source, Func.Return, Func]('self, 'function, 'Source, 'F)
+      }
+    }
+  }
+
   final class AccumulatingViaPartiallyApplied[F[+x], Source](source: Source) {
     inline def apply[Func](inline function: Func)(using
       Func: FunctionMirror[Func]
     )(using Source: Mirror.ProductOf[Source], F: Transformer.Accumulating.Support[F]): F[Func.Return] = ${
       AccumulatingProductTransformations.via[F, Source, Func.Return, Func]('source, 'function, 'Source, 'F)
+    }
+  }
+
+  final class FailFastViaPartiallyApplied[F[+x], Source](source: Source) {
+    inline def apply[Func](inline function: Func)(using
+      Func: FunctionMirror[Func]
+    )(using Source: Mirror.ProductOf[Source], F: Transformer.FailFast.Support[F]): F[Func.Return] = ${
+      FailFastProductTransformations.via[F, Source, Func.Return, Func]('source, 'function, 'Source, 'F)
     }
   }
 

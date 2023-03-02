@@ -20,14 +20,35 @@ object FailFastProductTransformations {
     given Fields.Source = Fields.Source.fromMirror(Source)
     given Fields.Dest = Fields.Dest.fromMirror(Dest)
 
-    createTransformation[F, Source, Dest](F, sourceValue, Fields.dest.value)
+    createTransformation[F, Source, Dest](F, sourceValue, Fields.dest.value)(Constructor.construct[Dest])
+  }
+
+  def via[F[+x]: Type, Source: Type, Dest: Type, Func](
+    sourceValue: Expr[Source],
+    function: Expr[Func],
+    Source: Expr[Mirror.ProductOf[Source]],
+    F: Expr[FailFast.Support[F]]
+  )(using Quotes): Expr[F[Dest]] = {
+    import quotes.reflect.*
+
+    function.asTerm match {
+      case func @ FunctionLambda(vals, _) =>
+        given Fields.Source = Fields.Source.fromMirror(Source)
+        given Fields.Dest = Fields.Dest.fromValDefs(vals)
+
+        createTransformation[F, Source, Dest](F, sourceValue, Fields.dest.value) { unwrappedFields =>
+          val rearrangedFields = rearrangeFieldsToDestOrder(unwrappedFields).map(_.value.asTerm)
+          Select.unique(func, "apply").appliedToArgs(rearrangedFields).asExprOf[Dest]
+        }
+      case other => report.errorAndAbort(s"'via' is only supported on eta-expanded methods!")
+    }
   }
 
   private def createTransformation[F[+x]: Type, Source: Type, Dest: Type](
     F: Expr[FailFast.Support[F]],
     sourceValue: Expr[Source],
     fieldsToTransformInto: List[Field]
-  )(using Quotes, Fields.Source) = {
+  )(construct: List[Field.Unwrapped] => Expr[Dest])(using Quotes, Fields.Source) = {
     import quotes.reflect.*
 
     val transformedFields =
@@ -48,12 +69,13 @@ object FailFastProductTransformations {
         }
       }
 
-    nestFlatMapsAndConstruct[F, Dest](F, transformedFields)
+    nestFlatMapsAndConstruct[F, Dest](F, transformedFields, construct)
   }
 
   private def nestFlatMapsAndConstruct[F[+x]: Type, Dest: Type](
     F: Expr[FailFast.Support[F]],
-    fields: List[Field.Wrapped[F] | Field.Unwrapped]
+    fields: List[Field.Wrapped[F] | Field.Unwrapped],
+    construct: List[Field.Unwrapped] => Expr[Dest]
   )(using Quotes): Expr[F[Dest]] = {
     def recurse(
       leftoverFields: List[Field.Wrapped[F] | Field.Unwrapped],
@@ -69,8 +91,7 @@ object FailFastProductTransformations {
                   ${
                     generateLambda[[A] =>> A, destField, Dest](
                       field,
-                      unwrappedValue =>
-                        Constructor.construct[Dest](Field.Unwrapped(field, unwrappedValue) :: collectedUnwrappedFields)
+                      unwrappedValue => construct(Field.Unwrapped(field, unwrappedValue) :: collectedUnwrappedFields)
                     )
                   }
                 )
@@ -97,7 +118,7 @@ object FailFastProductTransformations {
           recurse(next, f :: collectedUnwrappedFields)
 
         case Nil =>
-          val constructedValue = Constructor.construct[Dest](collectedUnwrappedFields)
+          val constructedValue = construct(collectedUnwrappedFields)
           '{ $F.pure[Dest]($constructedValue) }
       }
 
@@ -116,5 +137,10 @@ object FailFastProductTransformations {
       mtpe,
       { case (methSym, (arg1: Term) :: Nil) => f(arg1.asExprOf[A]).asTerm.changeOwner(methSym) }
     ).asExprOf[A => F[B]]
+  }
+
+  private def rearrangeFieldsToDestOrder(fields: List[Field.Unwrapped])(using Fields.Dest) = {
+    val unwrappedByName = fields.map(field => field.underlying.name -> field).toMap
+    Fields.dest.value.map(field => unwrappedByName(field.name))
   }
 }
