@@ -48,6 +48,8 @@ object Playground extends App {
 
   val cos = 
     DebugMacros.code(person.accumulatingVia[EitherCons](PersonRefined.apply))
+    
+  DebugMacros.code(person.failFastVia[Option](PersonRefined.apply))
 
   // val cos: Either[::[String], PersonRefined] =
   // Transformations.accumulatingVia[[A] =>> Either[::[String], A], Person, PersonRefined, (Name, Int, Option[Age], Int, Person3) => PersonRefined](person, PersonRefined.apply)
