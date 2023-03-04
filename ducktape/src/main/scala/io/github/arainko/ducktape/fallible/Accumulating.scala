@@ -1,8 +1,8 @@
-package io.github.arainko.ducktape.partial
+package io.github.arainko.ducktape.fallible
 
 import io.github.arainko.ducktape.Transformer
 import io.github.arainko.ducktape.internal.macros.*
-import io.github.arainko.ducktape.partial.Accumulating.Support
+import io.github.arainko.ducktape.fallible.Accumulating.Support
 
 import scala.collection.Factory
 import scala.deriving.Mirror

@@ -1,7 +1,7 @@
 package io.github.arainko.ducktape.internal.macros
 
+import io.github.arainko.ducktape.fallible.FailFast
 import io.github.arainko.ducktape.internal.modules.*
-import io.github.arainko.ducktape.partial.FailFast
 
 import scala.annotation.*
 import scala.deriving.Mirror

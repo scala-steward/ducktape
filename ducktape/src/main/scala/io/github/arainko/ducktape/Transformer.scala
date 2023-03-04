@@ -13,7 +13,7 @@ trait Transformer[Source, Dest] {
 }
 
 object Transformer {
-  export partial.{ Accumulating, FailFast }
+  export fallible.{ Accumulating, FailFast }
 
   def apply[Source, Dest](using transformer: Transformer[Source, Dest]): Transformer[Source, Dest] = transformer
 

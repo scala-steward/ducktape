@@ -1,13 +1,15 @@
 package io.github.arainko.ducktape.internal.macros
 
 import io.github.arainko.ducktape.internal.modules.*
-import io.github.arainko.ducktape.partial.Accumulating
+import io.github.arainko.ducktape.fallible.Accumulating
 
 import scala.annotation.tailrec
 import scala.deriving.Mirror
 import scala.quoted.*
 import scala.util.chaining.*
 import io.github.arainko.ducktape.function.FunctionMirror
+import io.github.arainko.ducktape.FallibleBuilderConfig
+import io.github.arainko.ducktape.BuilderConfig
 
 object AccumulatingProductTransformations {
   def transform[F[+x]: Type, Source: Type, Dest: Type](
@@ -22,6 +24,21 @@ object AccumulatingProductTransformations {
     given Fields.Dest = Fields.Dest.fromMirror(Dest)
 
     createTransformation[F, Source, Dest](F, sourceValue, Fields.dest.value)(Constructor.construct[Dest])
+  }
+
+  def transformConfigured[F[+x]: Type, Source: Type, Dest: Type](
+    Source: Expr[Mirror.ProductOf[Source]],
+    Dest: Expr[Mirror.ProductOf[Dest]],
+    F: Expr[Accumulating.Support[F]],
+    config: Expr[Seq[FallibleBuilderConfig[F, Source, Dest] | BuilderConfig[Source, Dest]]],
+    sourceValue: Expr[Source]
+  )(using Quotes): Expr[F[Dest]] = {
+    import quotes.reflect.*
+
+    given Fields.Source = Fields.Source.fromMirror(Source)
+    given Fields.Dest = Fields.Dest.fromMirror(Dest)
+
+    ???
   }
 
   def via[F[+x]: Type, Source: Type, Dest: Type, Func](

@@ -3,7 +3,7 @@ package io.github.arainko.ducktape.internal.macros
 import io.github.arainko.ducktape.*
 import io.github.arainko.ducktape.internal.macros.{ CoproductTransformations, ProductTransformations }
 import io.github.arainko.ducktape.internal.modules.*
-import io.github.arainko.ducktape.partial.{ Accumulating, FailFast }
+import io.github.arainko.ducktape.fallible.{ Accumulating, FailFast }
 
 import scala.deriving.*
 import scala.quoted.*

@@ -16,6 +16,15 @@ private[ducktape] object MaterializedConfiguration {
     case Renamed(destFieldName: String, sourceFieldName: String)
   }
 
+  enum FallibleProduct[F[+x]](destFieldName: String) extends MaterializedConfiguration {
+
+    case Const(destFieldName: String, value: Expr[F[Any]]) extends FallibleProduct[F](destFieldName)
+
+    case Computed(destFieldName: String, function: Expr[Any => F[Any]]) extends FallibleProduct[F](destFieldName)
+
+    case Total(value: Product) extends FallibleProduct[F](value.destFieldName)
+  }
+
   enum Coproduct extends MaterializedConfiguration {
     val tpe: Type[?]
 
@@ -107,6 +116,32 @@ private[ducktape] object MaterializedConfiguration {
       case other => Failure.abort(Failure.UnsupportedConfig(other, Failure.ConfigType.Field))
     }
   }
+
+  private def materializeSingleFallibleProductConfig[F[+x]: Type, Source: Type, Dest: Type](
+    config: Expr[FallibleBuilderConfig[F, Source, Dest] | BuilderConfig[Source, Dest]]
+  )(using Quotes, Fields.Source, Fields.Dest): List[FallibleProduct[F]] =
+    config match {
+      case '{
+            FieldConfig.fallibleConst[F, source, dest, fieldType, actualType](
+              $selector,
+              $value
+            )(using $ev1, $ev2, $ev3)
+          } =>
+        val name = Selectors.fieldName(Fields.dest, selector)
+        FallibleProduct.Const(name, value) :: Nil
+
+      case '{
+            FieldConfig.fallibleComputed[F, source, dest, fieldType, actualType](
+              $selector,
+              $function
+            )(using $ev1, $ev2, $ev3)
+          } =>
+        val name = Selectors.fieldName(Fields.dest, selector)
+        FallibleProduct.Computed(name, function.asInstanceOf[Expr[Any => F[Any]]]) :: Nil
+
+      case '{ $config: BuilderConfig[source, dest] } => 
+        materializeSingleProductConfig(config).map(FallibleProduct.Total(_))
+    }
 
   private def materializeSingleCoproductConfig[Source, Dest](config: Expr[BuilderConfig[Source, Dest]])(using Quotes) =
     config match {
