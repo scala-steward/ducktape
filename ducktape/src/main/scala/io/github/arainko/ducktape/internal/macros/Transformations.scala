@@ -36,6 +36,13 @@ private[ducktape] object Transformations {
   inline def liftFromTransformer[Source, Dest](source: Source)(using inline transformer: Transformer[Source, Dest]) =
     ${ LiftTransformation.liftTransformation[Source, Dest]('transformer, 'source) }
 
+  inline def transformAccumulatingConfigured[F[+x], Source, Dest](
+    source: Source,
+    inline config: FallibleBuilderConfig[F, Source, Dest] | BuilderConfig[Source, Dest]*
+  )(using F: Transformer.Accumulating.Support[F], Source: Mirror.ProductOf[Source], Dest: Mirror.ProductOf[Dest]) = ${
+    AccumulatingProductTransformations.transformConfigured[F, Source, Dest]('Source, 'Dest, 'F, 'config, 'source)
+  }
+
   inline def transformConfigured[Source, Dest](source: Source, inline config: BuilderConfig[Source, Dest]*) =
     ${ transformConfiguredMacro[Source, Dest]('source, 'config) }
 

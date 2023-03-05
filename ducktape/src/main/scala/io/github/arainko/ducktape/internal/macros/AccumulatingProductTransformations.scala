@@ -1,15 +1,15 @@
 package io.github.arainko.ducktape.internal.macros
 
-import io.github.arainko.ducktape.internal.modules.*
 import io.github.arainko.ducktape.fallible.Accumulating
+import io.github.arainko.ducktape.function.FunctionMirror
+import io.github.arainko.ducktape.internal.modules.*
+import io.github.arainko.ducktape.internal.util.NonEmptyList
+import io.github.arainko.ducktape.{ BuilderConfig, FallibleBuilderConfig }
 
 import scala.annotation.tailrec
 import scala.deriving.Mirror
 import scala.quoted.*
 import scala.util.chaining.*
-import io.github.arainko.ducktape.function.FunctionMirror
-import io.github.arainko.ducktape.FallibleBuilderConfig
-import io.github.arainko.ducktape.BuilderConfig
 
 object AccumulatingProductTransformations {
   def transform[F[+x]: Type, Source: Type, Dest: Type](
@@ -23,7 +23,7 @@ object AccumulatingProductTransformations {
     given Fields.Source = Fields.Source.fromMirror(Source)
     given Fields.Dest = Fields.Dest.fromMirror(Dest)
 
-    createTransformation[F, Source, Dest](F, sourceValue, Fields.dest.value)(Constructor.construct[Dest])
+    createTransformation[F, Source, Dest](F, sourceValue, Fields.dest.value, Nil, Nil)(Constructor.construct[Dest])
   }
 
   def transformConfigured[F[+x]: Type, Source: Type, Dest: Type](
@@ -38,7 +38,11 @@ object AccumulatingProductTransformations {
     given Fields.Source = Fields.Source.fromMirror(Source)
     given Fields.Dest = Fields.Dest.fromMirror(Dest)
 
-    ???
+    val materializedConfig = MaterializedConfiguration.materializeFallibleProductConfig(config)
+    val nonConfiguredFields = (Fields.dest.byName -- materializedConfig.map(_.destFieldName)).values.toList
+    val (wrappedFields, unwrappedFields) = configuredFieldTransformations(materializedConfig, sourceValue)
+
+    createTransformation(F, sourceValue, nonConfiguredFields, unwrappedFields, wrappedFields)(Constructor.construct[Dest])
   }
 
   def via[F[+x]: Type, Source: Type, Dest: Type, Func](
@@ -54,7 +58,7 @@ object AccumulatingProductTransformations {
         given Fields.Source = Fields.Source.fromMirror(Source)
         given Fields.Dest = Fields.Dest.fromValDefs(vals)
 
-        createTransformation[F, Source, Dest](F, sourceValue, Fields.dest.value) { unwrappedFields =>
+        createTransformation[F, Source, Dest](F, sourceValue, Fields.dest.value, Nil, Nil) { unwrappedFields =>
           val rearrangedFields = rearrangeFieldsToDestOrder(unwrappedFields).map(_.value.asTerm)
           Select.unique(func, "apply").appliedToArgs(rearrangedFields).asExprOf[Dest]
         }
@@ -65,14 +69,16 @@ object AccumulatingProductTransformations {
   private def createTransformation[F[+x]: Type, Source: Type, Dest: Type](
     F: Expr[Accumulating.Support[F]],
     sourceValue: Expr[Source],
-    fieldsToTransformInto: List[Field]
+    fieldsToTransformInto: List[Field],
+    unwrappedFieldsFromConfig: List[Field.Unwrapped],
+    wrappedFieldsFromConfig: List[Field.Wrapped[F]]
   )(construct: List[Field.Unwrapped] => Expr[Dest])(using Quotes, Fields.Source) = {
     import quotes.reflect.*
 
     // Ideally .partition would work but if I deconstruct these two into tuples based on the subtype both of their parts are inferred as the union
     // anyway, hence this thing:
-    val wrappedFields = List.newBuilder[Field.Wrapped[F]]
-    val unwrappedFields = List.newBuilder[Field.Unwrapped]
+    val wrappedFields = List.newBuilder[Field.Wrapped[F]].addAll(wrappedFieldsFromConfig)
+    val unwrappedFields = List.newBuilder[Field.Unwrapped].addAll(unwrappedFieldsFromConfig)
 
     fieldsToTransformInto.foreach { dest =>
       val source =
@@ -92,69 +98,38 @@ object AccumulatingProductTransformations {
     }
 
     wrappedFields
-      .mapResult(wrapped => Option.when(wrapped.nonEmpty)(::(wrapped.head, wrapped.tail)))
+      .mapResult(NonEmptyList.fromList)
       .result()
-      .map { transformedFields =>
-        zipFields[F, Dest](F, transformedFields) match {
-          case '{ $zipped: F[a] } =>
-            '{
-              $F.map(
-                $zipped,
-                value => ${ unzipAndConstruct[Dest](transformedFields, unwrappedFields.result(), 'value, construct) }
-              )
-            }
-        }
-      }
+      .map { transformedFields => ZippedProduct.zipAndConstruct(F, transformedFields, unwrappedFields.result())(construct) }
       .getOrElse('{ $F.pure(${ construct(unwrappedFields.result()) }) })
   }
 
-  private def zipFields[F[+x]: Type, Dest: Type](
-    F: Expr[Accumulating.Support[F]],
-    wrappedFields: NonEmptyList[Field.Wrapped[F]]
-  )(using Quotes): Expr[F[Any]] =
-    wrappedFields.map(_.value).reduceLeft { (accumulated, current) =>
-      (accumulated -> current) match {
-        case '{ $accumulated: F[a] } -> '{ $current: F[b] } =>
-          '{ $F.product[`a`, `b`]($accumulated, $current) }
+  private def configuredFieldTransformations[F[+x]: Type, Source: Type](
+    configs: List[MaterializedConfiguration.FallibleProduct[F]],
+    sourceValue: Expr[Source]
+  )(using Quotes, Fields.Dest) = {
+    import quotes.reflect.*
+    import MaterializedConfiguration.*
+
+    val wrappedFields = List.newBuilder[Field.Wrapped[F]]
+    val unwrappedFields = List.newBuilder[Field.Unwrapped]
+
+    configs.foreach { cfg =>
+      (Fields.dest.unsafeGet(cfg.destFieldName) -> cfg) match {
+        case (field, FallibleProduct.Const(_, value)) =>
+          wrappedFields += Field.Wrapped(field, value)
+        case (field, FallibleProduct.Computed(_, function)) =>
+          wrappedFields += Field.Wrapped(field, '{ $function($sourceValue) })
+        case (field, FallibleProduct.Total(Product.Const(_, value))) =>
+          unwrappedFields += Field.Unwrapped(field, value)
+        case (field, FallibleProduct.Total(Product.Computed(_, function))) =>
+          unwrappedFields += Field.Unwrapped(field, '{ $function($sourceValue) })
+        case (field, FallibleProduct.Total(Product.Renamed(destField, sourceField))) =>
+          unwrappedFields += Field.Unwrapped(field, sourceValue.accessFieldByName(sourceField).asExpr)
       }
     }
 
-  private def unzipAndConstruct[Dest: Type](
-    wrappedFields: NonEmptyList[Field.Wrapped[?]],
-    unwrappedFields: List[Field.Unwrapped],
-    nestedPairs: Expr[Any],
-    construct: List[Field.Unwrapped] => Expr[Dest]
-  )(using Quotes) = {
-    import quotes.reflect.*
-
-    ZippedProduct.unzip(nestedPairs, wrappedFields) match {
-      case (bind: Bind, unzippedFields) =>
-        Match(
-          nestedPairs.asTerm,
-          CaseDef(
-            bind,
-            None,
-            construct(unzippedFields ::: unwrappedFields).asTerm
-          ) :: Nil
-        ).asExprOf[Dest]
-
-      case (pattern: Unapply, unzippedFields) =>
-        // workaround for https://github.com/lampepfl/dotty/issues/16784
-        val matchErrorBind = Symbol.newBind(Symbol.spliceOwner, "x", Flags.EmptyFlags, TypeRepr.of[Any])
-        val wronglyMatchedReference = Ref(matchErrorBind).asExpr
-        val matchErrorCase =
-          CaseDef(Bind(matchErrorBind, Wildcard()), None, '{ throw new MatchError($wronglyMatchedReference) }.asTerm)
-
-        Match(
-          nestedPairs.asTerm,
-          CaseDef(
-            pattern,
-            None,
-            construct(unzippedFields ::: unwrappedFields).asTerm
-          ) :: matchErrorCase :: Nil
-        ).asExprOf[Dest]
-    }
-
+    wrappedFields.result() -> unwrappedFields.result()
   }
 
   private def rearrangeFieldsToDestOrder(fields: List[Field.Unwrapped])(using Fields.Dest) = {
@@ -162,5 +137,4 @@ object AccumulatingProductTransformations {
     Fields.dest.value.map(field => unwrappedByName(field.name))
   }
 
-  private type NonEmptyList[+A] = ::[A]
 }

@@ -1,12 +1,86 @@
 package io.github.arainko.ducktape.internal.modules
 
 import io.github.arainko.ducktape.internal.macros.*
+import io.github.arainko.ducktape.internal.util.*
 import io.github.arainko.ducktape.internal.modules.Field.Unwrapped
 
 import scala.annotation.tailrec
 import scala.quoted.*
+import io.github.arainko.ducktape.Transformer
 
 object ZippedProduct {
+
+  /**
+   * 'Zips' a product using Transformer.Accumulating.Support[F]#product into a nested Tuple2 then
+   * unpacks that said tuple and allows the caller to use the unpacked fields to construct a tree of type Dest.
+   *
+   * @param wrappedFields fields wrapped in F
+   * @param unwrappedFields fields that are not wrapped in F (will not be a part of the zipped tuple)
+   * @param construct function that allows the caller to create trees with the unpacked values
+   */
+  def zipAndConstruct[F[+x]: Type, Dest: Type](
+    F: Expr[Transformer.Accumulating.Support[F]],
+    wrappedFields: NonEmptyList[Field.Wrapped[F]],
+    unwrappedFields: List[Field.Unwrapped]
+  )(construct: List[Field.Unwrapped] => Expr[Dest])(using Quotes): Expr[F[Dest]] = {
+    zipFields[F](F, wrappedFields) match {
+      case '{ $zipped: F[a] } =>
+        '{
+          $F.map(
+            $zipped,
+            value => ${ unzipAndConstruct[Dest](wrappedFields, unwrappedFields, 'value, construct) }
+          )
+        }
+    }
+  }
+
+  private def zipFields[F[+x]: Type](
+    F: Expr[Transformer.Accumulating.Support[F]],
+    wrappedFields: NonEmptyList[Field.Wrapped[F]]
+  )(using Quotes): Expr[F[Any]] =
+    wrappedFields.map(_.value).reduceLeft { (accumulated, current) =>
+      (accumulated -> current) match {
+        case '{ $accumulated: F[a] } -> '{ $current: F[b] } =>
+          '{ $F.product[`a`, `b`]($accumulated, $current) }
+      }
+    }
+
+  private def unzipAndConstruct[Dest: Type](
+    wrappedFields: NonEmptyList[Field.Wrapped[?]],
+    unwrappedFields: List[Field.Unwrapped],
+    nestedPairs: Expr[Any],
+    construct: List[Field.Unwrapped] => Expr[Dest]
+  )(using Quotes) = {
+    import quotes.reflect.*
+
+    ZippedProduct.unzip(nestedPairs, wrappedFields) match {
+      case (bind: Bind, unzippedFields) =>
+        Match(
+          nestedPairs.asTerm,
+          CaseDef(
+            bind,
+            None,
+            construct(unzippedFields ::: unwrappedFields).asTerm
+          ) :: Nil
+        ).asExprOf[Dest]
+
+      case (pattern: Unapply, unzippedFields) =>
+        // workaround for https://github.com/lampepfl/dotty/issues/16784
+        val matchErrorBind = Symbol.newBind(Symbol.spliceOwner, "x", Flags.EmptyFlags, TypeRepr.of[Any])
+        val wronglyMatchedReference = Ref(matchErrorBind).asExpr
+        val matchErrorCase =
+          CaseDef(Bind(matchErrorBind, Wildcard()), None, '{ throw new MatchError($wronglyMatchedReference) }.asTerm)
+
+        Match(
+          nestedPairs.asTerm,
+          CaseDef(
+            pattern,
+            None,
+            construct(unzippedFields ::: unwrappedFields).asTerm
+          ) :: matchErrorCase :: Nil
+        ).asExprOf[Dest]
+    }
+  }
 
   /**
    * Imagine you have a value of type: Tuple2[Tuple2[Tuple2[Int, Double], Float], String], eg.
@@ -25,9 +99,9 @@ object ZippedProduct {
    *
    * and a list of unwrapped fields that allow you to operate on the bound values of the pattern match.
    */
-  def unzip(
+  private def unzip(
     nestedPairs: Expr[Any],
-    fields: ::[Field.Wrapped[?]]
+    fields: NonEmptyList[Field.Wrapped[?]]
   )(using Quotes): (quotes.reflect.Unapply | quotes.reflect.Bind, List[Unwrapped]) = {
     import quotes.reflect.*
 
@@ -71,7 +145,7 @@ object ZippedProduct {
       }
     }
 
-    recurse(nestedPairs.asTerm.tpe.asType, fields.reverse)
+    recurse(nestedPairs.asTerm.tpe.asType, fields.reverse.toList)
   }
 
   private def Tuple2Extractor(using Quotes)(A: quotes.reflect.TypeRepr, B: quotes.reflect.TypeRepr) = {

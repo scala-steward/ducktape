@@ -13,7 +13,8 @@ extension [Source](value: Source) {
 
   def failFastInto[Dest] = ???
 
-  def accumulatingInto[Dest] = ???
+  def accumulatingInto[F[+x], Dest]: AppliedFallibleAccumulatingBuilder[F, Source, Dest] = 
+    AppliedFallibleAccumulatingBuilder[F, Source, Dest](value)
 
   def to[Dest](using Transformer[Source, Dest]): Dest = Transformer[Source, Dest].transform(value)
 

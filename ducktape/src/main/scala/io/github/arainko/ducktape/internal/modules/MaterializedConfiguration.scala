@@ -16,11 +16,11 @@ private[ducktape] object MaterializedConfiguration {
     case Renamed(destFieldName: String, sourceFieldName: String)
   }
 
-  enum FallibleProduct[F[+x]](destFieldName: String) extends MaterializedConfiguration {
+  enum FallibleProduct[F[+x]](val destFieldName: String) extends MaterializedConfiguration {
 
-    case Const(destFieldName: String, value: Expr[F[Any]]) extends FallibleProduct[F](destFieldName)
+    case Const(private val fieldName: String, value: Expr[F[Any]]) extends FallibleProduct[F](fieldName)
 
-    case Computed(destFieldName: String, function: Expr[Any => F[Any]]) extends FallibleProduct[F](destFieldName)
+    case Computed(private val fieldName: String, function: Expr[Any => F[Any]]) extends FallibleProduct[F](fieldName)
 
     case Total(value: Product) extends FallibleProduct[F](value.destFieldName)
   }
@@ -41,6 +41,17 @@ private[ducktape] object MaterializedConfiguration {
       .flatMap(materializeSingleProductConfig)
       .groupBy(_.destFieldName)
       .map((_, fieldConfigs) => fieldConfigs.last) // keep the last applied field config only
+      .toList
+
+  def materializeFallibleProductConfig[F[+x]: Type, Source: Type, Dest: Type](
+    config: Expr[Seq[FallibleBuilderConfig[F, Source, Dest] | BuilderConfig[Source, Dest]]]
+  )(using Quotes, Fields.Source, Fields.Dest): List[FallibleProduct[F]] =
+    Varargs
+      .unapply(config)
+      .getOrElse(Failure.abort(Failure.UnsupportedConfig(config, Failure.ConfigType.Field)))
+      .flatMap(materializeSingleFallibleProductConfig)
+      .groupBy(_.destFieldName)
+      .map((_, fieldConfigs) => fieldConfigs.last)
       .toList
 
   def materializeArgConfig[Source, Dest, ArgSelector <: FunctionArguments](
@@ -139,8 +150,12 @@ private[ducktape] object MaterializedConfiguration {
         val name = Selectors.fieldName(Fields.dest, selector)
         FallibleProduct.Computed(name, function.asInstanceOf[Expr[Any => F[Any]]]) :: Nil
 
-      case '{ $config: BuilderConfig[source, dest] } => 
+      case '{ $config: BuilderConfig[Source, Dest] } =>
         materializeSingleProductConfig(config).map(FallibleProduct.Total(_))
+
+      // TODO: Add more suggestions to this failure
+      case other => 
+        Failure.abort(Failure.UnsupportedConfig(other, Failure.ConfigType.Field))
     }
 
   private def materializeSingleCoproductConfig[Source, Dest](config: Expr[BuilderConfig[Source, Dest]])(using Quotes) =
