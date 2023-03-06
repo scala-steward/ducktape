@@ -43,6 +43,13 @@ private[ducktape] object Transformations {
     AccumulatingProductTransformations.transformConfigured[F, Source, Dest]('Source, 'Dest, 'F, 'config, 'source)
   }
 
+  inline def transformFailFastConfigured[F[+x], Source, Dest](
+    source: Source,
+    inline config: FallibleBuilderConfig[F, Source, Dest] | BuilderConfig[Source, Dest]*
+  )(using F: Transformer.FailFast.Support[F], Source: Mirror.ProductOf[Source], Dest: Mirror.ProductOf[Dest]) = ${
+    FailFastProductTransformations.transformConfigured[F, Source, Dest]('Source, 'Dest, 'F, 'config, 'source)
+  }
+
   inline def transformConfigured[Source, Dest](source: Source, inline config: BuilderConfig[Source, Dest]*) =
     ${ transformConfiguredMacro[Source, Dest]('source, 'config) }
 

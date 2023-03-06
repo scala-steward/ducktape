@@ -52,7 +52,13 @@ object Playground extends App {
   // DebugMacros.code(person.failFastVia[Option](PersonRefined.apply))
 
   DebugMacros.code {
-    person.accumulatingInto[EitherCons, PersonRefined].transform(Field.computed(_.age, _.additional + 200))
+    person
+      .into[PersonRefined]
+      .failFast[Option]
+      .transform(
+        Field.computed(_.age, _.additional + 200),
+        Field.fallibleConst(_.name, Name.refineNameFf.transform("asd"))
+      )
   }
 
   // val cos: Either[::[String], PersonRefined] =

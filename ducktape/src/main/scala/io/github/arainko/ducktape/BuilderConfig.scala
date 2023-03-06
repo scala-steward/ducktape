@@ -53,6 +53,10 @@ object Field {
     ev3: Mirror.ProductOf[FieldSource]
   ): BuilderConfig[Source, Dest] = throw NotQuotedException("Field.allMatching")
 
+  object Fallible {
+    
+  }
+
   @compileTimeOnly("'Field.fallibleConst' needs to be erased from the AST with a macro.")
   def fallibleConst[F[+x], Source, Dest, FieldType, ActualType](selector: Dest => FieldType, value: F[ActualType])(using
     ev1: ActualType <:< FieldType,
