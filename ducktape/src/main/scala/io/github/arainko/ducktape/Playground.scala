@@ -53,11 +53,11 @@ object Playground extends App {
 
   DebugMacros.code {
     person
-      .into[PersonRefined]
+      .intoVia(PersonRefined.apply)
       .failFast[Option]
       .transform(
-        Field.computed(_.age, _.additional + 200),
-        Field.fallibleConst(_.name, Name.refineNameFf.transform("asd"))
+        Arg.computed(_.int, _.additional + 200),
+        Arg.fallibleConst(_.name, Name.refineNameFf.transform("asd"))
       )
   }
 

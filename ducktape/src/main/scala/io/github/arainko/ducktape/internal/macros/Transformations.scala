@@ -13,11 +13,26 @@ private[ducktape] object Transformations {
     Source: Mirror.ProductOf[Source],
     Func: FunctionMirror.Aux[Func, Dest]
   ): Dest = ${ ProductTransformations.via('source, 'function, 'Func, 'Source) }
+  
+  inline def viaConfigured[Source, Dest, Func, ArgSelector <: FunctionArguments](
+    source: Source,
+    inline function: Func,
+    inline config: ArgBuilderConfig[Source, Dest, ArgSelector]*
+  )(using Source: Mirror.ProductOf[Source]): Dest =
+    ${ ProductTransformations.viaConfigured[Source, Dest, Func, ArgSelector]('source, 'function, 'config, 'Source) }
 
   inline def accumulatingVia[F[+x], Source, Func](inline function: Func)(using
     Func: FunctionMirror[Func]
   )(source: Source)(using Source: Mirror.ProductOf[Source], F: Transformer.Accumulating.Support[F]): F[Func.Return] = ${
     AccumulatingProductTransformations.via[F, Source, Func.Return, Func]('source, 'function, 'Source, 'F)
+  }
+
+  inline def accumulatingViaConfigured[F[+x], Source, Dest, Func, ArgSelector <: FunctionArguments](
+    source: Source,
+    inline function: Func,
+    inline config: FallibleArgBuilderConfig[F, Source, Dest, ArgSelector] | ArgBuilderConfig[Source, Dest, ArgSelector]*
+  )(using F: Transformer.Accumulating.Support[F], Source: Mirror.ProductOf[Source]): F[Dest] = ${
+    AccumulatingProductTransformations.viaConfigured[F, Source, Dest, Func, ArgSelector]('source, 'function, 'config, 'Source, 'F)
   }
 
   inline def failFastVia[F[+x], Source, Func](inline function: Func)(using
@@ -26,12 +41,13 @@ private[ducktape] object Transformations {
     FailFastProductTransformations.via[F, Source, Func.Return, Func]('source, 'function, 'Source, 'F)
   }
 
-  inline def viaConfigured[Source, Dest, Func, ArgSelector <: FunctionArguments](
+  inline def failFastViaConfigured[F[+x], Source, Dest, Func, ArgSelector <: FunctionArguments](
     source: Source,
     inline function: Func,
-    inline config: ArgBuilderConfig[Source, Dest, ArgSelector]*
-  )(using Source: Mirror.ProductOf[Source]): Dest =
-    ${ ProductTransformations.viaConfigured[Source, Dest, Func, ArgSelector]('source, 'function, 'config, 'Source) }
+    inline config: FallibleArgBuilderConfig[F, Source, Dest, ArgSelector] | ArgBuilderConfig[Source, Dest, ArgSelector]*
+  )(using F: Transformer.FailFast.Support[F], Source: Mirror.ProductOf[Source]): F[Dest] = ${
+    FailFastProductTransformations.viaConfigured[F, Source, Dest, Func, ArgSelector]('source, 'function, 'config, 'Source, 'F)
+  }
 
   inline def liftFromTransformer[Source, Dest](source: Source)(using inline transformer: Transformer[Source, Dest]) =
     ${ LiftTransformation.liftTransformation[Source, Dest]('transformer, 'source) }

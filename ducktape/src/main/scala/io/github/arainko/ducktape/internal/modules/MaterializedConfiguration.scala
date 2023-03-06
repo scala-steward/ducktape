@@ -65,6 +65,17 @@ private[ducktape] object MaterializedConfiguration {
       .map((_, fieldConfigs) => fieldConfigs.last) // keep the last applied field config only
       .toList
 
+  def materializeFallibleArgConfig[F[+x]: Type, Source: Type, Dest: Type, ArgSelector <: FunctionArguments: Type](
+    config: Expr[Seq[FallibleArgBuilderConfig[F, Source, Dest, ArgSelector] | ArgBuilderConfig[Source, Dest, ArgSelector]]]
+  )(using Quotes, Fields.Source, Fields.Dest): List[FallibleProduct[F]] =
+    Varargs
+      .unapply(config)
+      .getOrElse(Failure.abort(Failure.UnsupportedConfig(config, Failure.ConfigType.Arg)))
+      .map(materializeSingleFallibleArgConfig)
+      .groupBy(_.destFieldName)
+      .map((_, fieldConfigs) => fieldConfigs.last) // keep the last applied field config only
+      .toList
+
   def materializeCoproductConfig[Source, Dest](
     config: Expr[Seq[BuilderConfig[Source, Dest]]]
   )(using Quotes, Cases.Source, Cases.Dest): List[Coproduct] =
@@ -200,7 +211,7 @@ private[ducktape] object MaterializedConfiguration {
 
   private def materializeSingleFallibleArgConfig[F[+x]: Type, Source: Type, Dest: Type, ArgSelector <: FunctionArguments: Type](
     config: Expr[FallibleArgBuilderConfig[F, Source, Dest, ArgSelector] | ArgBuilderConfig[Source, Dest, ArgSelector]]
-  )(using Quotes, Fields.Source, Fields.Dest) =
+  )(using Quotes, Fields.Source, Fields.Dest): FallibleProduct[F] =
     config match {
       case '{
             type argSelector <: FunctionArguments
@@ -216,7 +227,7 @@ private[ducktape] object MaterializedConfiguration {
         val argName = Selectors.argName(Fields.dest, selector)
         FallibleProduct.Computed(argName, function.asInstanceOf[Expr[Any => F[Any]]])
 
-      case '{ $config: ArgBuilderConfig[Source, Dest, ArgSelector] } => materializeSingleArgConfig(config)
+      case '{ $config: ArgBuilderConfig[Source, Dest, ArgSelector] } => FallibleProduct.Total(materializeSingleArgConfig(config))
 
       case other => Failure.abort(Failure.UnsupportedConfig(other, Failure.ConfigType.Arg))
     }

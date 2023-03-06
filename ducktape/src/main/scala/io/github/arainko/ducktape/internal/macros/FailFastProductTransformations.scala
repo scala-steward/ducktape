@@ -10,7 +10,7 @@ import scala.quoted.*
 import scala.util.chaining.*
 
 private[ducktape] object FailFastProductTransformations {
-  export fallibleTransformations.{transform, transformConfigured, via}
+  export fallibleTransformations.{ transform, transformConfigured, via, viaConfigured }
 
   private val fallibleTransformations = new FallibleProductTransformations[FailFast.Support] {
     override protected def createTransformation[F[+x]: Type, Source: Type, Dest: Type](

@@ -7,6 +7,9 @@ import scala.quoted.*
 import scala.deriving.Mirror
 import io.github.arainko.ducktape.FallibleBuilderConfig
 import io.github.arainko.ducktape.BuilderConfig
+import io.github.arainko.ducktape.function.FunctionArguments
+import io.github.arainko.ducktape.ArgBuilderConfig
+import io.github.arainko.ducktape.FallibleArgBuilderConfig
 
 abstract class FallibleProductTransformations[
   Support[f[+x]] <: Accumulating.Support[f] | FailFast.Support[f]
@@ -62,6 +65,28 @@ abstract class FallibleProductTransformations[
           Select.unique(func, "apply").appliedToArgs(rearrangedFields).asExprOf[Dest]
         }
       case other => report.errorAndAbort(s"'via' is only supported on eta-expanded methods!")
+    }
+  }
+
+  final def viaConfigured[F[+x]: Type, Source: Type, Dest: Type, Func: Type, ArgSelector <: FunctionArguments: Type](
+    sourceValue: Expr[Source],
+    function: Expr[Func],
+    config: Expr[Seq[FallibleArgBuilderConfig[F, Source, Dest, ArgSelector] | ArgBuilderConfig[Source, Dest, ArgSelector]]],
+    Source: Expr[Mirror.ProductOf[Source]],
+    F: Expr[Support[F]]
+  )(using Quotes): Expr[F[Dest]] = {
+    import quotes.reflect.*
+
+    given Fields.Source = Fields.Source.fromMirror(Source)
+    given Fields.Dest = Fields.Dest.fromFunctionArguments[ArgSelector]
+
+    val materializedConfig = MaterializedConfiguration.materializeFallibleArgConfig(config)
+    val nonConfiguredFields = (Fields.dest.byName -- materializedConfig.map(_.destFieldName)).values.toList
+    val (wrappedFields, unwrappedFields) = configuredFieldTransformations(materializedConfig, sourceValue)
+
+    createTransformation[F, Source, Dest](F, sourceValue, Fields.dest.value, unwrappedFields, wrappedFields) { unwrappedFields =>
+      val rearrangedFields = rearrangeFieldsToDestOrder(unwrappedFields).map(_.value.asTerm)
+      Select.unique(function.asTerm, "apply").appliedToArgs(rearrangedFields).asExprOf[Dest]
     }
   }
 
