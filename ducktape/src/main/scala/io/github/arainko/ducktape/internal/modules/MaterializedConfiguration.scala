@@ -154,7 +154,7 @@ private[ducktape] object MaterializedConfiguration {
         materializeSingleProductConfig(config).map(FallibleProduct.Total(_))
 
       // TODO: Add more suggestions to this failure
-      case other => 
+      case other =>
         Failure.abort(Failure.UnsupportedConfig(other, Failure.ConfigType.Field))
     }
 
@@ -194,6 +194,29 @@ private[ducktape] object MaterializedConfiguration {
         val argName = Selectors.argName(Fields.dest, destSelector)
         val fieldName = Selectors.fieldName(Fields.source, sourceSelector)
         Product.Renamed(argName, fieldName)
+
+      case other => Failure.abort(Failure.UnsupportedConfig(other, Failure.ConfigType.Arg))
+    }
+
+  private def materializeSingleFallibleArgConfig[F[+x]: Type, Source: Type, Dest: Type, ArgSelector <: FunctionArguments: Type](
+    config: Expr[FallibleArgBuilderConfig[F, Source, Dest, ArgSelector] | ArgBuilderConfig[Source, Dest, ArgSelector]]
+  )(using Quotes, Fields.Source, Fields.Dest) =
+    config match {
+      case '{
+            type argSelector <: FunctionArguments
+            Arg.fallibleConst[F, source, dest, argType, actualType, `argSelector`]($selector, $const)(using $ev1, $ev2)
+          } =>
+        val argName = Selectors.argName(Fields.dest, selector)
+        FallibleProduct.Const(argName, const)
+
+      case '{
+            type argSelector <: FunctionArguments
+            Arg.fallibleComputed[F, source, dest, argType, actualType, `argSelector`]($selector, $function)(using $ev1, $ev2)
+          } =>
+        val argName = Selectors.argName(Fields.dest, selector)
+        FallibleProduct.Computed(argName, function.asInstanceOf[Expr[Any => F[Any]]])
+
+      case '{ $config: ArgBuilderConfig[Source, Dest, ArgSelector] } => materializeSingleArgConfig(config)
 
       case other => Failure.abort(Failure.UnsupportedConfig(other, Failure.ConfigType.Arg))
     }
