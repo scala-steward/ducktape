@@ -3,7 +3,7 @@ package io.github.arainko.ducktape
 import io.github.arainko.ducktape.fallible.{ Accumulating, FailFast }
 import io.github.arainko.ducktape.internal.*
 import io.github.arainko.ducktape.internal.macros.*
-import io.github.arainko.ducktape.newtypes.{Age, Name}
+import io.github.arainko.ducktape.newtypes.{ Age, Name }
 
 import scala.deriving.Mirror
 
