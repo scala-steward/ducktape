@@ -14,12 +14,6 @@ object FailFast extends LowPriorityFailFastInstances {
 
   def apply[F[+x], Source, Dest](using transformer: FailFast[F, Source, Dest]): FailFast[F, Source, Dest] = transformer
 
-  // TODO: Add builder
-  def define = ???
-
-  // TODO: Add method-expanding builder
-  def defineVia = ???
-
   inline given derived[F[+x], Source, Dest](using
     Source: Mirror.ProductOf[Source],
     Dest: Mirror.ProductOf[Dest],

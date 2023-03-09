@@ -1,9 +1,10 @@
 package io.github.arainko.ducktape.builder
 
 import io.github.arainko.ducktape.*
-import io.github.arainko.ducktape.internal.macros.*
-import scala.deriving.Mirror
 import io.github.arainko.ducktape.builder.AppliedBuilder.FailFast
+import io.github.arainko.ducktape.internal.macros.*
+
+import scala.deriving.Mirror
 
 final class AppliedBuilder[Source, Dest](appliedTo: Source) {
 
@@ -19,14 +20,15 @@ final class AppliedBuilder[Source, Dest](appliedTo: Source) {
 }
 
 object AppliedBuilder {
-  final class FailFast[F[+x], Source, Dest](private val source: Source) {
+
+  final class FailFast[F[+x], Source, Dest] private[ducktape] (private val source: Source) {
     inline def transform(
       inline config: FallibleBuilderConfig[F, Source, Dest] | BuilderConfig[Source, Dest]*
     )(using F: Transformer.FailFast.Support[F], Source: Mirror.ProductOf[Source], Dest: Mirror.ProductOf[Dest]): F[Dest] =
       Transformations.transformFailFastConfigured[F, Source, Dest](source, config*)
   }
 
-  final class Accumulating[F[+x], Source, Dest](private val source: Source) {
+  final class Accumulating[F[+x], Source, Dest] private[ducktape] (private val source: Source) {
     inline def transform(
       inline config: FallibleBuilderConfig[F, Source, Dest] | BuilderConfig[Source, Dest]*
     )(using F: Transformer.Accumulating.Support[F], Source: Mirror.ProductOf[Source], Dest: Mirror.ProductOf[Dest]): F[Dest] =

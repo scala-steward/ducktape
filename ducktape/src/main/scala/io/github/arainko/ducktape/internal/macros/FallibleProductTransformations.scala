@@ -1,15 +1,14 @@
 package io.github.arainko.ducktape.internal.macros
 
-import io.github.arainko.ducktape.Transformer, Transformer.*
+import io.github.arainko.ducktape.function.FunctionArguments
 import io.github.arainko.ducktape.internal.modules.*
 import io.github.arainko.ducktape.internal.util.*
-import scala.quoted.*
+import io.github.arainko.ducktape.{ Field as _, * }
+
 import scala.deriving.Mirror
-import io.github.arainko.ducktape.FallibleBuilderConfig
-import io.github.arainko.ducktape.BuilderConfig
-import io.github.arainko.ducktape.function.FunctionArguments
-import io.github.arainko.ducktape.ArgBuilderConfig
-import io.github.arainko.ducktape.FallibleArgBuilderConfig
+import scala.quoted.*
+
+import Transformer.*
 
 abstract class FallibleProductTransformations[
   Support[f[+x]] <: Accumulating.Support[f] | FailFast.Support[f]
@@ -84,9 +83,10 @@ abstract class FallibleProductTransformations[
     val nonConfiguredFields = (Fields.dest.byName -- materializedConfig.map(_.destFieldName)).values.toList
     val (wrappedFields, unwrappedFields) = configuredFieldTransformations(materializedConfig, sourceValue)
 
-    createTransformation[F, Source, Dest](F, sourceValue, Fields.dest.value, unwrappedFields, wrappedFields) { unwrappedFields =>
-      val rearrangedFields = rearrangeFieldsToDestOrder(unwrappedFields).map(_.value.asTerm)
-      Select.unique(function.asTerm, "apply").appliedToArgs(rearrangedFields).asExprOf[Dest]
+    createTransformation[F, Source, Dest](F, sourceValue, nonConfiguredFields, unwrappedFields, wrappedFields) {
+      unwrappedFields =>
+        val rearrangedFields = rearrangeFieldsToDestOrder(unwrappedFields).map(_.value.asTerm)
+        Select.unique(function.asTerm, "apply").appliedToArgs(rearrangedFields).asExprOf[Dest]
     }
   }
 

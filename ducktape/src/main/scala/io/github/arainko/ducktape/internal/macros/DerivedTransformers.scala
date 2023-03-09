@@ -1,12 +1,13 @@
 package io.github.arainko.ducktape.internal.macros
 
 import io.github.arainko.ducktape.*
+import io.github.arainko.ducktape.fallible.{ Accumulating, FailFast }
 import io.github.arainko.ducktape.internal.macros.{ CoproductTransformations, ProductTransformations }
 import io.github.arainko.ducktape.internal.modules.*
-import io.github.arainko.ducktape.fallible.{ Accumulating, FailFast }
 
 import scala.deriving.*
 import scala.quoted.*
+
 private[ducktape] object DerivedTransformers {
   inline def product[Source, Dest](using
     Source: Mirror.ProductOf[Source],

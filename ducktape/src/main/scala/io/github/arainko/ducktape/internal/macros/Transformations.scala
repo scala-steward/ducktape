@@ -13,7 +13,7 @@ private[ducktape] object Transformations {
     Source: Mirror.ProductOf[Source],
     Func: FunctionMirror.Aux[Func, Dest]
   ): Dest = ${ ProductTransformations.via('source, 'function, 'Func, 'Source) }
-  
+
   inline def viaConfigured[Source, Dest, Func, ArgSelector <: FunctionArguments](
     source: Source,
     inline function: Func,

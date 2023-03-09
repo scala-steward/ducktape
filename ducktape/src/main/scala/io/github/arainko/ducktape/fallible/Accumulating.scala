@@ -1,8 +1,8 @@
 package io.github.arainko.ducktape.fallible
 
 import io.github.arainko.ducktape.Transformer
-import io.github.arainko.ducktape.internal.macros.*
 import io.github.arainko.ducktape.fallible.Accumulating.Support
+import io.github.arainko.ducktape.internal.macros.*
 
 import scala.collection.Factory
 import scala.deriving.Mirror
@@ -14,12 +14,6 @@ trait Accumulating[F[+x], Source, Dest] {
 object Accumulating extends LowPriorityAccumulatingInstances {
 
   def apply[F[+x], Source, Dest](using transformer: Accumulating[F, Source, Dest]): Accumulating[F, Source, Dest] = transformer
-
-  // TODO: Add builder
-  def define = ???
-
-  // TODO: Add method-expanding builder
-  def defineVia = ???
 
   inline given derived[F[+x], Source, Dest](using
     Source: Mirror.ProductOf[Source],

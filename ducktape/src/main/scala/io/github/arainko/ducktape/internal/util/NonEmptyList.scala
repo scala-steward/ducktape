@@ -13,11 +13,11 @@ private[ducktape] object NonEmptyList {
 
   private[ducktape] def apply[A](head: A, tail: A*): NonEmptyList[A] = Cons(head, List(tail*))
 
-  private[ducktape] def fromList[A](list: List[A]): Option[NonEmptyList[A]] = 
+  private[ducktape] def fromList[A](list: List[A]): Option[NonEmptyList[A]] =
     PartialFunction.condOpt(list) { case cons @ (_ :: _) => fromCons(cons) }
 
   extension [A](self: NonEmptyList[A]) {
-    export toList.{reduceLeft, head, tail}
+    export toList.{ reduceLeft, head, tail }
 
     private[ducktape] def toList: ::[A] = self
 
