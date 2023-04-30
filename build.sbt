@@ -1,3 +1,6 @@
+import laika.helium.config.ThemeLink
+import laika.theme.config.Color
+import laika.helium.Helium
 import com.typesafe.tools.mima.core._
 import xerial.sbt.Sonatype._
 import org.typelevel.sbt.TypelevelMimaPlugin
@@ -10,8 +13,9 @@ ThisBuild / organizationName := "arainko"
 ThisBuild / startYear := Some(2023)
 ThisBuild / licenses := Seq(License.Apache2)
 ThisBuild / developers := List(tlGitHubDev("arainko", "Aleksander Rainko"))
-ThisBuild / tlSonatypeUseLegacyHost := false
 ThisBuild / scalaVersion := "3.2.2"
+ThisBuild / tlSonatypeUseLegacyHost := false
+ThisBuild / tlSitePublishBranch := Some("master")
 
 ThisBuild / scalafixDependencies += "com.github.liancheng" %% "organize-imports" % "0.6.0"
 ThisBuild / semanticdbEnabled := true
@@ -50,10 +54,28 @@ lazy val ducktape =
 lazy val docs =
   project
     .in(file("documentation"))
-    .enablePlugins(NoPublishPlugin, MdocPlugin)
-    .disablePlugins(MimaPlugin)
+    .enablePlugins(TypelevelSitePlugin)
     .settings(
-      mdocVariables := Map("VERSION" -> version.value),
+      tlSiteHeliumConfig := {
+        val current = tlSiteHeliumConfig.value
+        modifyTheme(current)
+      },
       libraryDependencies += ("org.scalameta" %% "scalafmt-dynamic" % "3.6.1").cross(CrossVersion.for3Use2_13)
     )
     .dependsOn(ducktape.jvm)
+
+def modifyTheme(helium: Helium) = {
+  helium.site
+    .themeColors(
+      primary = Color.rgb(177, 178, 255),
+      primaryMedium = Color.rgb(170, 196, 255),
+      primaryLight = Color.rgb(238, 241, 255),
+      secondary = Color.rgb(210, 218, 255),
+      text = Color.hex("FFF"),
+      background = Color.hex("394867"),
+      bgGradient = Color.hex("394867") -> Color.hex("394867")
+    )
+    .site
+    .favIcons()
+    .site
+}
