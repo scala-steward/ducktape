@@ -8,6 +8,8 @@ import scala.deriving.Mirror
 import scala.quoted.*
 
 private[ducktape] object Transformations {
+  inline def repro: String = "aASD"
+
   inline def via[Source, Dest, Func](source: Source, inline function: Func)(using
     Source: Mirror.ProductOf[Source],
     Func: FunctionMirror.Aux[Func, Dest]

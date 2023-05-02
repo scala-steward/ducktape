@@ -6,4 +6,6 @@ private[ducktape] object Errors {
 
 Make sure you have an instance of either Transformer.Mode.Accumulating[F] or Transformer.Mode.FailFast[F] (and not its supertype Transformer.Mode[F]) in implicit scope.
 """)
+
+  inline def repro: String = "ASD"
 }
