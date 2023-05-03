@@ -14,8 +14,8 @@ final class DefinitionViaBuilder[Source, Dest, Func, ArgSelector <: FunctionArgu
 
   inline def build(
     inline config: ArgBuilderConfig[Source, Dest, ArgSelector]*
-  )(using Mirror.ProductOf[Source]): Transformer[Source, Dest] =
-    from => Transformations.viaConfigured[Source, Dest, Func, ArgSelector](from, function, config*)
+  )(using Mirror.ProductOf[Source]): Transformer[Source, Dest] = ???
+    // from => Transformations.viaConfigured[Source, Dest, Func, ArgSelector](from, function, config*)
 
 }
 
@@ -44,15 +44,15 @@ object DefinitionViaBuilder {
       inline config: FallibleArgBuilderConfig[F, Source, Dest, ArgSelector] | ArgBuilderConfig[Source, Dest, ArgSelector]*
     )(using Source: Mirror.ProductOf[Source]): FallibleTransformer[F, Source, Dest] =
       new {
-        def transform(value: Source): F[Dest] =
-          inline F match {
-            case given Mode.Accumulating[F] =>
-              Transformations.accumulatingViaConfigured[F, Source, Dest, Func, ArgSelector](value, function, config*)
-            case given Mode.FailFast[F] =>
-              Transformations.failFastViaConfigured[F, Source, Dest, Func, ArgSelector](value, function, config*)
-            case other =>
-              Errors.cannotDetermineTransformationMode
-          }
+        def transform(value: Source): F[Dest] = ???
+          // inline F match {
+          //   case given Mode.Accumulating[F] =>
+          //     Transformations.accumulatingViaConfigured[F, Source, Dest, Func, ArgSelector](value, function, config*)
+          //   case given Mode.FailFast[F] =>
+          //     Transformations.failFastViaConfigured[F, Source, Dest, Func, ArgSelector](value, function, config*)
+          //   case other =>
+          //     Errors.cannotDetermineTransformationMode
+          // }
       }
   }
 }

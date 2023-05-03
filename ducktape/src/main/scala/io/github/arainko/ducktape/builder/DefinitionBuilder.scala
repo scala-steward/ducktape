@@ -10,8 +10,8 @@ final class DefinitionBuilder[Source, Dest] {
   def fallible[F[+x], M <: Mode[F]](using M): DefinitionBuilder.Fallible[F, M, Source, Dest] =
     DefinitionBuilder.Fallible[F, M, Source, Dest]
 
-  inline def build(inline config: BuilderConfig[Source, Dest]*): Transformer[Source, Dest] =
-    from => Transformations.transformConfigured(from, config*)
+  inline def build(inline config: BuilderConfig[Source, Dest]*): Transformer[Source, Dest] = ???
+    // from => Transformations.transformConfigured(from, config*)
 }
 
 object DefinitionBuilder {
@@ -24,15 +24,15 @@ object DefinitionBuilder {
       Dest: Mirror.ProductOf[Dest]
     ): Transformer.Fallible[F, Source, Dest] =
       new {
-        def transform(value: Source): F[Dest] =
-          inline F match {
-            case given Mode.Accumulating[F] =>
-              Transformations.transformAccumulatingConfigured[F, Source, Dest](value, config*)
-            case given Mode.FailFast[F] =>
-              Transformations.transformFailFastConfigured[F, Source, Dest](value, config*)
-            case other =>
-              Errors.cannotDetermineTransformationMode
-          }
+        def transform(value: Source): F[Dest] = ???
+          // inline F match {
+          //   case given Mode.Accumulating[F] =>
+          //     Transformations.transformAccumulatingConfigured[F, Source, Dest](value, config*)
+          //   case given Mode.FailFast[F] =>
+          //     Transformations.transformFailFastConfigured[F, Source, Dest](value, config*)
+          //   case other =>
+          //     Errors.cannotDetermineTransformationMode
+          // }
       }
   }
 }

@@ -7,7 +7,7 @@ import io.github.arainko.ducktape.function.*
 import scala.deriving.Mirror
 import scala.quoted.*
 
-private[ducktape] object ReproOoject {
+private[ducktape] object Transformations2 {
   inline def repro = "ASD"
 
   inline def via[Source, Dest, Func](source: Source, inline function: Func)(using

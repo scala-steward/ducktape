@@ -11,8 +11,8 @@ final class AppliedBuilder[Source, Dest](appliedTo: Source) {
   def fallible[F[+x], M <: Mode[F]](using M): AppliedBuilder.Fallible[F, M, Source, Dest] =
     AppliedBuilder.Fallible[F, M, Source, Dest](appliedTo)
 
-  inline def transform(inline config: BuilderConfig[Source, Dest]*): Dest =
-    Transformations.transformConfigured(appliedTo, config*)
+  inline def transform(config: BuilderConfig[Source, Dest]*): Dest =
+    Transformations.transformConfigured
 }
 
 object AppliedBuilder {
@@ -21,14 +21,14 @@ object AppliedBuilder {
 
     inline def transform(
       inline config: FallibleBuilderConfig[F, Source, Dest] | BuilderConfig[Source, Dest]*
-    )(using Mirror.ProductOf[Source], Mirror.ProductOf[Dest]): F[Dest] =
-      inline F match {
-        case given Mode.Accumulating[F] =>
-          Transformations.transformAccumulatingConfigured[F, Source, Dest](source, config*)
-        case given Mode.FailFast[F] =>
-          Transformations.transformFailFastConfigured[F, Source, Dest](source, config*)
-        case other =>
-          Errors.cannotDetermineTransformationMode
-      }
+    )(using Mirror.ProductOf[Source], Mirror.ProductOf[Dest]): F[Dest] = ???
+      // inline F match {
+      //   case given Mode.Accumulating[F] =>
+      //     Transformations.transformAccumulatingConfigured[F, Source, Dest](source, config*)
+      //   case given Mode.FailFast[F] =>
+      //     Transformations.transformFailFastConfigured[F, Source, Dest](source, config*)
+      //   case other =>
+      //     Errors.cannotDetermineTransformationMode
+      // }
   }
 }
