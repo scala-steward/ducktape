@@ -18,7 +18,7 @@ extension [Source](value: Source) {
   inline def via[Func](inline function: Func)(using
     Func: FunctionMirror[Func],
     Source: Mirror.ProductOf[Source]
-  ): Func.Return = Transformations.via(value, function)
+  ): Func.Return = ???
 }
 
 extension [F[+x], Source](value: Source)(using F: Transformer.Mode[F]) {
@@ -28,15 +28,7 @@ extension [F[+x], Source](value: Source)(using F: Transformer.Mode[F]) {
 
   inline def fallibleVia[Func](inline function: Func)(using
     Func: FunctionMirror[Func]
-  )(using Source: Mirror.ProductOf[Source]): F[Func.Return] =
-    inline F match {
-      case given fallible.Mode.FailFast[F] =>
-        Transformations.failFastVia[F, Source, Func](function)(value)
-      case given fallible.Mode.Accumulating[F] =>
-        Transformations.accumulatingVia[F, Source, Func](function)(value)
-      case other =>
-        Errors.cannotDetermineTransformationMode
-    }
+  )(using Source: Mirror.ProductOf[Source]): F[Func.Return] = ???
 
 }
 

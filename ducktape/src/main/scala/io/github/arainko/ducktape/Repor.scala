@@ -7,4 +7,4 @@ import scala.deriving.Mirror
 import io.github.arainko.ducktape.fallible.Mode.Accumulating
 import io.github.arainko.ducktape.fallible.Mode.FailFast
 
-extension (value: Int) inline def costam2 = Transformations.repro
+extension (value: Int) inline def costam3 = Transformations.repro

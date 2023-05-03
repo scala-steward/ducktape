@@ -7,8 +7,8 @@ import io.github.arainko.ducktape.function.*
 import scala.deriving.Mirror
 import scala.quoted.*
 
-private[ducktape] object Transformations {
-  inline def repro: String = "aASD"
+private[ducktape] object ReproOoject {
+  inline def repro = "ASD"
 
   inline def via[Source, Dest, Func](source: Source, inline function: Func)(using
     Source: Mirror.ProductOf[Source],
@@ -70,7 +70,7 @@ private[ducktape] object Transformations {
   inline def transformConfigured[Source, Dest](source: Source, inline config: BuilderConfig[Source, Dest]*) =
     ${ transformConfiguredMacro[Source, Dest]('source, 'config) }
 
-  def transformConfiguredMacro[Source: Type, Dest: Type](
+  private def transformConfiguredMacro[Source: Type, Dest: Type](
     sourceValue: Expr[Source],
     config: Expr[Seq[BuilderConfig[Source, Dest]]]
   )(using Quotes): Expr[Dest] =
